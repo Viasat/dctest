@@ -1,0 +1,15 @@
+{:source-paths ["src/"]
+
+ :dependencies [[funcool/promesa "8.0.450"]
+                [cljs-bean "1.8.0"]]
+
+ :builds
+ {:dctest
+  {:target :node-script
+   :main dctest.core/-main
+   :output-to "build/dctest.js"
+   :devtools {:enabled false :console.support false}
+
+   :compiler-options
+   {:optimizations :simple
+    :source-map-use-fs-paths true}}}}

@@ -1,3 +1,6 @@
+;; Copyright (c) 2024, Viasat, Inc
+;; Licensed under EPL 2.0
+
 (ns dctest.core
   (:require [clojure.string :as S]
             [clojure.pprint :refer [pprint]]

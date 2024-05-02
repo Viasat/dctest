@@ -1,6 +1,7 @@
 {
   "name": "dctest",
   "version": "0.1",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "docker-compose integration test runner",
   "dependencies": {
     "dockerode": "^3.3.1",

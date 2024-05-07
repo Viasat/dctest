@@ -1,40 +1,29 @@
 name: Example Suite
 
-setup:
-  suite:
-    - exec: node1
-      run: echo 'runs once before suite'
-  test:
-    - exec: node1
-      run: echo 'runs once before each non-skipped test'
-
-teardown:
-  suite:
-    - exec: node1
-      run: echo 'runs once after suite, unless suite is skipped'
-  test:
-    - exec: node1
-      run: echo 'runs after each non-skipped test, even if the test fails'
-
-
 tests:
 
-  - name: Passing test
+  test-1:
+    name: Passing test
     steps:
       - exec: node1
         run: /bin/true
 
-  - name: Failing test
+  test-2:
+    name: Failing test
     steps:
       - exec: node1
         run: /bin/false
+      - exec: node1
+        run: echo 'This step is skipped'
 
-  - name: Skipped test (unless running with --continue-on-error)
+  test-3:
+    name: Skipped test (unless running with --continue-on-error)
     steps:
       - exec: node1
         run: /bin/true
 
-  - name: Test nonexistent container
+  test-4:
+    name: Test nonexistent container
     steps:
       - exec: node2
         run: /bin/true

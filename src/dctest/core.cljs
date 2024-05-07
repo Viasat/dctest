@@ -173,17 +173,19 @@ Options:
   (P/let [{step-name :name} step
 
           {:keys [context outcome error]}
-          , (if (get-in context [:state :skipping])
+          , (if (get-in context [:state :failed])
               {:context context :outcome :skip}
               (-> (P/let [context (execute-step* context step)]
                     {:context context :outcome :pass})
                   (P/catch
                     (fn [err]
-                      {:context context :outcome :fail :error (.-message err)}))))]
+                      {:context context :outcome :fail :error (.-message err)}))))
+          results (merge {:outcome outcome}
+                         (when step-name {:name step-name})
+                         (when error {:error error}))
+          context (update-in context [:state :failed] #(or % (failure? results)))]
     {:context context
-     :results (merge {:outcome outcome}
-                     (when step-name {:name step-name})
-                     (when error {:error error}))}))
+     :results results}))
 
 (defn execute-steps [context steps]
   (P/let [results (P/loop [steps steps
@@ -195,10 +197,6 @@ Options:
 
                               {context :context
                                step-results :results} (execute-step context step)
-                              context (update-in context [:state :skipping]
-                                                 #(or %
-                                                      (and (failure? step-results)
-                                                           (not (get-in context [:strategy :continue-on-error])))))
 
                               results (conj results step-results)]
                         (P/recur steps context results))))]
@@ -206,85 +204,49 @@ Options:
      :results results}))
 
 (defn run-test [context suite test]
-  (P/let [skip-test? (get-in context [:state :skipping])
-          test-name (:name test)
-
+  (P/let [test-name (:name test)
           context (assoc-in context [:state :failed] false)
-
-          setup (execute-steps context (get-in suite [:setup :test]))
-          steps (execute-steps (:context setup) (:steps test))
-          teardown (execute-steps (:context setup) (get-in suite [:teardown :test]))
-
-          results (concat (:results setup)
-                          (:results steps)
-                          (:results teardown))
+          steps (execute-steps context (:steps test))
+          results (:results steps)
+          outcome (if (some failure? results) :fail :pass)
           error (->> (filter failure? results)
                      first
-                     :error)
-
-          outcome (cond
-                    skip-test? :skip
-                    (some failure? results) :fail
-                    :else :pass)]
+                     :error)]
     (merge {:outcome outcome
-            :setup (:results setup)
-            :steps (:results steps)
-            :teardown (:results teardown)}
+            :steps results}
            (when test-name {:name test-name})
            (when error {:error error}))))
 
 (defn run-suite [context suite]
   (log (:opts context) "  " (:name suite))
-  (P/let [skip-suite? (get-in context [:state :skipping])
-
-          context (assoc-in context [:state :failed] false)
-
-          setup (execute-steps (assoc-in context [:strategy :continue-on-error] true)
-                                 (get-in suite [:setup :suite]))
-          test-results (P/loop [tests (:tests suite)
-                                context (assoc context :state (get-in setup [:context :state]))
-                                results []]
-                         (if (empty? tests)
-                           results
-                           (P/let [[test & tests] tests
-                                   result (run-test context suite test)
-                                   context (update-in context [:state :skipping]
-                                                      #(or %
-                                                           (and (failure? result)
-                                                                (not (get-in context [:strategy :continue-on-error])))))
-                                   results (conj results result)]
-                             (log (:opts context) "    " (short-outcome result) (:name result))
-                             (P/recur tests context results))))
-          teardown (execute-steps (-> context
-                                        (assoc-in [:state :skipping] skip-suite?)
-                                        (assoc-in [:strategy :continue-on-error] true))
-                                    (get-in suite [:teardown :suite]))
-
-          outcome (cond
-                    skip-suite? :skip
-                    (some failure?
-                          (concat (:results setup)
-                                  test-results
-                                  (:results teardown))) :fail
-                    :else :pass)]
+  (P/let [results (P/loop [tests (vals (:tests suite))
+                           context context
+                           results []]
+                    (if (or (empty? tests)
+                            (and (some failure? results)
+                                 (not (get-in context [:strategy :continue-on-error]))))
+                      results
+                      (P/let [[test & tests] tests
+                              result (run-test context suite test)
+                              results (conj results result)]
+                        (log (:opts context) "    " (short-outcome result) (:name result))
+                        (P/recur tests context results))))
+          outcome (if (some failure? results) :fail :pass)]
 
     (log (:opts context)) ; breath between suites
 
     {:outcome outcome
      :name (:name suite)
-     :setup (:results setup)
-     :tests test-results
-     :teardown (:results teardown)}))
+     :tests results}))
 
 (defn summarize [results]
   ;; Note: Suite can fail in setup/teardown, when all tests pass
   (let [overall (if (some failure? results) :fail :pass)
         test-totals (frequencies (map :outcome (mapcat :tests results)))]
-    (merge {:pass 0 :fail 0 :skip 0}
+    (merge {:pass 0 :fail 0}
            test-totals
            {:outcome overall :results results})))
 
-;; TODO: improve output (and show failures in suite setup/teardown)
 (defn print-results [opts summary]
   (doseq [suite (:results summary)]
     (doseq [[index {test-name :name
@@ -297,8 +259,7 @@ Options:
       (log opts "")))
   (log opts
        (:pass summary) "passing,"
-       (:fail summary) "failed,"
-       (:skip summary) "skipped"))
+       (:fail summary) "failed"))
 
 (defn write-results-file [opts summary]
   (when-let [path (:results-file opts)]
@@ -319,18 +280,14 @@ Options:
                            context {:docker (Docker.)
                                     :opts {:project project
                                            :quiet quiet}
-                                    :state {:failed false
-                                            :skipping false}
                                     :strategy {:continue-on-error continue-on-error}}
                            results []]
-                    (if (empty? suites)
+                    (if (or (empty? suites)
+                            (and (some failure? results)
+                                 (not (get-in context [:strategy :continue-on-error]))))
                       results
                       (P/let [[suite & suites] suites
                               suite-results (run-suite context suite)
-                              context (update-in context [:state :skipping]
-                                                 #(or %
-                                                      (and (failure? suite-results)
-                                                           (not (get-in context [:strategy :continue-on-error])))))
                               results (conj results suite-results)]
                         (P/recur suites context results))))
           summary (summarize results)]

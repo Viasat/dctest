@@ -1,11 +1,1 @@
-#!/usr/bin/env bash
-
-CUR_DIR=$(readlink -f $(dirname "${0}"))
-SCRIPT_NAME=$(basename "${0}")
-NBB=$(which 2>/dev/null ${CUR_DIR}/node_modules/.bin/nbb | head -n1)
-
-die() { echo >&2 "${*}"; exit 1; }
-
-[ -e "${NBB}" ] || die "Missing ${NBB}. Maybe run 'npm install' in ${TOP_DIR}?"
-
-NODE_PATH="${CUR_DIR}/node_modules" exec ${NBB} -cp "${CUR_DIR}/src" -m dctest.core/-main "${@}"
+scripts/nbb

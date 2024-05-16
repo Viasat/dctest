@@ -7,6 +7,11 @@ tests:
     steps:
       - exec: node1
         run: /bin/true
+      - exec: node1
+        env:
+          FOO: bar
+        run: |
+          [ "${FOO}" == "bar" ]
 
   test-2:
     name: Failing test

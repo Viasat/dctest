@@ -103,6 +103,7 @@ Options:
   (P/let [{:keys [docker opts]} context
           {:keys [project]} opts
           {service :exec index :index command :run} step
+          env (merge (:env context) (:env step))
           index (or index 1)
 
           container (dc-service docker project service index)
@@ -110,8 +111,9 @@ Options:
               (throw (ex-info (str "No container found for service '" service "' (index=" index ")")
                               {})))
 
-          exec (P/then (docker-exec container command {})
-                         ->clj)]
+          env (mapv (fn [[k v]] (str k "=" v)) env)
+          exec (P/then (docker-exec container command {:Env env})
+                       ->clj)]
 
     (when-not (zero? (:ExitCode exec))
       (throw (ex-info (str "Non-zero exit code for command: " command)
@@ -155,7 +157,9 @@ Options:
 
 (defn run-test [context suite test]
   (P/let [test-name (:name test)
-          context (assoc-in context [:state :failed] false)
+          context (-> context
+                      (assoc-in [:state :failed] false)
+                      (update :env merge (:env test)))
           steps (execute-steps context (:steps test))
           results (:results steps)
           outcome (if (some failure? results) :fail :pass)
@@ -169,7 +173,8 @@ Options:
 
 (defn run-suite [context suite]
   (log (:opts context) "  " (:name suite))
-  (P/let [results (P/loop [tests (vals (:tests suite))
+  (P/let [context (update context :env merge (:env suite))
+          results (P/loop [tests (vals (:tests suite))
                            context context
                            results []]
                     (if (or (empty? tests)
@@ -219,7 +224,16 @@ Options:
 ;; Load Suite
 
 (defn normalize [suite]
-  (update suite :tests update-keys name))
+  (let [->step (fn [step]
+                 (update step :env update-keys name))
+        ->test (fn [test]
+                 (-> test
+                     (update :env update-keys name)
+                     (update :steps #(mapv ->step %))))]
+    (-> suite
+        (update :env update-keys name)
+        (update :tests update-keys name)
+        (update :tests update-vals ->test))))
 
 (defn load-test-suite! [opts path]
   (P/let [schema (util/load-yaml "schema.yaml")
@@ -242,6 +256,7 @@ Options:
 
           results (P/loop [suites suites
                            context {:docker (Docker.)
+                                    :env {}
                                     :opts {:project project
                                            :quiet quiet}
                                     :strategy {:continue-on-error continue-on-error}}

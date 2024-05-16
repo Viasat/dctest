@@ -1,4 +1,5 @@
 $defs:
+  interval: { type: string, pattern: "^\\s*((\\d+)m)?((\\d+)s)?\\s*$" }
   env:
     type: object
     propertyNames: { type: string }
@@ -35,3 +36,11 @@ properties:
               exec: { type: string }
               name: { type: string }
               run:  { type: string }
+              repeat:
+                type: object
+                additionalProperties: false
+                required: []
+                properties:
+                  interval: { "$ref": "#/$defs/interval", default: "1s" }
+                  retries:  { type: integer } # no default (infinite retries)
+                default: { retries: 0 } # do not retry, if repeat is missing

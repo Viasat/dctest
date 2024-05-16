@@ -12,6 +12,7 @@ tests:
           FOO: bar
         run: |
           [ "${FOO}" == "bar" ]
+        repeat: { retries: 3, interval: '1s' }
 
   test-2:
     name: Failing test

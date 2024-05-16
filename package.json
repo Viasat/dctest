@@ -4,6 +4,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "description": "docker-compose integration test runner",
   "dependencies": {
+    "ajv": "^8.12.0",
     "dockerode": "^3.3.1",
     "js-yaml": "^4.1.0",
     "nbb": "^1.2.179",

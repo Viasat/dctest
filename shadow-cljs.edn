@@ -1,4 +1,4 @@
-{:source-paths ["src/" "test/"]
+{:source-paths ["src/" "test/" "node_modules/@lonocloud/cljs-utils/src"]
 
  :dependencies [[funcool/promesa "8.0.450"]
                 [cljs-bean "1.8.0"]]

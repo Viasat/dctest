@@ -3,10 +3,12 @@
 
 (ns dctest.core
   (:require [cljs-bean.core :refer [->clj]]
+            [clojure.edn :as edn]
             [clojure.string :as S]
             [clojure.pprint :refer [pprint]]
             [dctest.util :as util :refer [fatal obj->str log]]
             [promesa.core :as P]
+            [viasat.retry :as retry]
             ["stream" :as stream]
             #_["dockerode$default" :as Docker]
             ))
@@ -98,26 +100,38 @@ Options:
 (defn short-outcome [{:keys [outcome]}]
   (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
 
-;; TODO: Support more than exec :-)
 (defn execute-step* [context step]
   (P/let [{:keys [docker opts]} context
           {:keys [project]} opts
           {service :exec index :index command :run} step
+          {:keys [interval retries]} (:repeat step)
           env (merge (:env context) (:env step))
           index (or index 1)
 
-          container (dc-service docker project service index)
-          _ (when-not container
-              (throw (ex-info (str "No container found for service '" service "' (index=" index ")")
-                              {})))
+          run-expect! (fn [result]
+                        (when-not (zero? (:ExitCode result))
+                          (throw (ex-info (str "Non-zero exit code for command: " command)
+                                          {}))))
+          run-exec (fn []
+                     (P/catch
+                       (P/let [container (dc-service docker project service index)
+                               _ (when-not container
+                                   (throw (ex-info (str "No container found for service '" service "' (index=" index ")")
+                                                   {})))
+                               env (mapv (fn [[k v]] (str k "=" v)) env)
+                               result (P/then (docker-exec container command {:Env env})
+                                              ->clj)]
+                         (run-expect! result)
+                         {:result result})
+                       (fn [err]
+                         {:error (.-message err)})))
+          exec (retry/retry-times run-exec
+                                  retries
+                                  {:delay-ms interval
+                                   :check-fn :result})]
 
-          env (mapv (fn [[k v]] (str k "=" v)) env)
-          exec (P/then (docker-exec container command {:Env env})
-                       ->clj)]
-
-    (when-not (zero? (:ExitCode exec))
-      (throw (ex-info (str "Non-zero exit code for command: " command)
-                      {})))
+    (when-let [msg (:error exec)]
+      (throw (ex-info msg {})))
 
     context))
 
@@ -223,9 +237,22 @@ Options:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Load Suite
 
+;; see schema.yaml
+(def INTERVAL-RE #"^\s*((\d+)m)?((\d+)s)?\s*$") ; 1m20s
+
+(defn parse-interval [time-str]
+  (let [[_ _ minutes _ seconds] (re-matches INTERVAL-RE time-str)
+        minutes (edn/read-string (or minutes "0"))
+        seconds (edn/read-string (or seconds "0"))]
+    (-> (* minutes 60)
+        (+ seconds)
+        (* 1000))))
+
 (defn normalize [suite]
   (let [->step (fn [step]
-                 (update step :env update-keys name))
+                 (-> step
+                     (update :env update-keys name)
+                     (update-in [:repeat :interval] parse-interval)))
         ->test (fn [test]
                  (-> test
                      (update :env update-keys name)

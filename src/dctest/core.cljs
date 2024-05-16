@@ -98,10 +98,6 @@ Options:
 (defn short-outcome [{:keys [outcome]}]
   (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
 
-(defn load-test-suite! [opts path]
-  (P/let [suite (util/load-yaml path)]
-    suite))
-
 ;; TODO: Support more than exec :-)
 (defn execute-step* [context step]
   (P/let [{:keys [docker opts]} context
@@ -218,6 +214,20 @@ Options:
 (defn write-results-file [opts summary]
   (when-let [path (:results-file opts)]
     (util/write-file path (obj->str summary))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Load Suite
+
+(defn normalize [suite]
+  (update suite :tests update-keys name))
+
+(defn load-test-suite! [opts path]
+  (P/let [schema (util/load-yaml "schema.yaml")
+          suite (P/-> (util/load-yaml path)
+                      (util/check-schema schema true)
+                      normalize)]
+    suite))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Main

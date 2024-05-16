@@ -1,0 +1,28 @@
+# suite
+type: object
+additionalProperties: false
+required: []
+properties:
+  name: { type: string }
+  tests:
+    type: object
+    additionalProperties:
+
+      # test
+      type: object
+      additionalProperties: false
+      required: []
+      properties:
+        name: { type: string }
+        steps:
+          type: array
+          items:
+
+            # step
+            type: object
+            additionalProperties: false
+            required: [ exec, run ]
+            properties:
+              exec: { type: string }
+              name: { type: string }
+              run:  { type: string }

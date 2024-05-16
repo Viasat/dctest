@@ -1,6 +1,6 @@
 (ns runtests
   (:require [cljs.test :refer-macros [run-all-tests]]
-            ;; Add test namespaces here
+            [dctest.expressions-test]
             ))
 
 (run-all-tests #"dctest\..*")

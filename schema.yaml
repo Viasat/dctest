@@ -1,8 +1,15 @@
+$defs:
+  env:
+    type: object
+    propertyNames: { type: string }
+    additionalProperties: { type: string }
+
 # suite
 type: object
 additionalProperties: false
 required: []
 properties:
+  env:  { "$ref": "#/$defs/env" }
   name: { type: string }
   tests:
     type: object
@@ -13,6 +20,7 @@ properties:
       additionalProperties: false
       required: []
       properties:
+        env:  { "$ref": "#/$defs/env" }
         name: { type: string }
         steps:
           type: array
@@ -23,6 +31,7 @@ properties:
             additionalProperties: false
             required: [ exec, run ]
             properties:
+              env:  { "$ref": "#/$defs/env" }
               exec: { type: string }
               name: { type: string }
               run:  { type: string }

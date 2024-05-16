@@ -11,7 +11,10 @@ RUN cd /app && ./node_modules/.bin/shadow-cljs info
 
 # main app build
 ADD src/ /app/src/
-#ADD test/ /app/test/
+ADD test/ /app/test/
+RUN cd /app && \
+    ./node_modules/.bin/shadow-cljs compile test && \
+    node build/test.js
 RUN cd /app && \
     ./node_modules/.bin/shadow-cljs compile dctest && \
     chmod +x build/*.js

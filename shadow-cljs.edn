@@ -1,4 +1,4 @@
-{:source-paths ["src/"]
+{:source-paths ["src/" "test/"]
 
  :dependencies [[funcool/promesa "8.0.450"]
                 [cljs-bean "1.8.0"]]
@@ -12,4 +12,12 @@
 
    :compiler-options
    {:optimizations :simple
-    :source-map-use-fs-paths true}}}}
+    :source-map-use-fs-paths true}}
+
+  :test
+  {:target :node-test
+   :output-to "build/test.js"
+   :compiler-options
+   {:optimizations :simple
+    :source-map-use-fs-paths true}}
+  }}

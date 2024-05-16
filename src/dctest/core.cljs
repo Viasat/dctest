@@ -2,15 +2,12 @@
 ;; Licensed under EPL 2.0
 
 (ns dctest.core
-  (:require [clojure.string :as S]
+  (:require [cljs-bean.core :refer [->clj]]
+            [clojure.string :as S]
             [clojure.pprint :refer [pprint]]
+            [dctest.util :as util :refer [fatal obj->str log]]
             [promesa.core :as P]
-            [cljs-bean.core :refer [->clj]]
-            ["fs" :as fs]
-            ["util" :refer [promisify]]
             ["stream" :as stream]
-            ["neodoc" :as neodoc]
-            ["js-yaml" :as yaml]
             #_["dockerode$default" :as Docker]
             ))
 
@@ -28,43 +25,6 @@ Options:
 ")
 
 (set! *warn-on-infer* false)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Argument processing
-
-(defn clean-opts [arg-map]
-  (reduce (fn [o [a v]]
-            (let [k (keyword (S/replace a #"^[-<]*([^>]*)[>]*$" "$1"))]
-              (assoc o k (or (get o k) v))))
-          {} arg-map))
-
-(defn parse-opts [argv]
-  (-> usage
-      (neodoc/run (clj->js {:optionsFirst true
-                            :smartOptions true
-                            :argv argv}))
-      js->clj
-      clean-opts))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; General utility functions
-
-(defn obj->str [obj]
-  (js/JSON.stringify (clj->js obj)))
-
-(def slurp-buf (promisify (.-readFile fs)))
-(def write-file (promisify (.-writeFile fs)))
-
-(def Eprintln #(binding [*print-fn* *print-err-fn*] (apply println %&)))
-
-(defn fatal [code & args]
-  (when (seq args)
-    (apply Eprintln args))
-  (js/process.exit code))
-
-(defn log [opts & args]
-  (when-not (:quiet opts)
-    (apply println args)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Docker/Compose
@@ -139,13 +99,7 @@ Options:
   (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
 
 (defn load-test-suite! [opts path]
-  (P/let [buffer (slurp-buf path)
-          parsed (try
-                   (->clj (.load yaml buffer))
-                   (catch yaml/YAMLException err
-                     (Eprintln "Failure to load test suite:" path)
-                     (fatal 2 (.-message err))))
-          suite (update parsed :name #(or % path))]
+  (P/let [suite (util/load-yaml path)]
     suite))
 
 ;; TODO: Support more than exec :-)
@@ -263,13 +217,13 @@ Options:
 
 (defn write-results-file [opts summary]
   (when-let [path (:results-file opts)]
-    (write-file path (obj->str summary))))
+    (util/write-file path (obj->str summary))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Main
 
 (defn -main [& argv]
-  (P/let [opts (parse-opts (or argv #js []))
+  (P/let [opts (util/parse-opts usage (or argv #js []))
           {:keys [continue-on-error quiet project test-suite]} opts
 
           suites (P/all

@@ -10,6 +10,7 @@ die() { echo >&2 "${*}"; exit 1; }
 
 [ -e "${NBB}" ] || die "Missing ${NBB}. Maybe run 'npm install' in ${ROOT_DIR}?"
 
-NODE_PATH="${ROOT_DIR}/node_modules" exec ${NBB} \
+DCTEST_SCHEMA="${DCTEST_SCHEMA:-${ROOT_DIR}/schema.yaml}" \
+  NODE_PATH="${ROOT_DIR}/node_modules" exec ${NBB} \
   -cp "${ROOT_DIR}/src:${ROOT_DIR}/test:${ROOT_DIR}/node_modules/@lonocloud/cljs-utils/src" \
   "${TARGET_DIR}/${TARGET_NAME}.cljs" "${@}"

@@ -24,6 +24,8 @@ Options:
   --continue-on-error           Continue running tests, even if one fails
   --quiet                       Only print final totals
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
+  --schema-file SCHEMA          Path to schema file [env: DCTEST_SCHEMA]
+                                [default: ./schema.yaml]
 ")
 
 (set! *warn-on-infer* false)
@@ -263,7 +265,7 @@ Options:
         (update :tests update-vals ->test))))
 
 (defn load-test-suite! [opts path]
-  (P/let [schema (util/load-yaml "schema.yaml")
+  (P/let [schema (util/load-yaml (:schema-file opts))
           suite (P/-> (util/load-yaml path)
                       (util/check-schema schema true)
                       normalize)]

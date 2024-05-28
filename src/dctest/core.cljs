@@ -5,10 +5,10 @@
   (:require [cljs-bean.core :refer [->clj]]
             [clojure.edn :as edn]
             [clojure.string :as S]
-            [dctest.util :as util :refer [obj->str log]]
+            [dctest.util :as util :refer [obj->str log indent]]
             [promesa.core :as P]
             [viasat.retry :as retry]
-            [viasat.util :refer [fatal parse-opts write-file]]
+            [viasat.util :refer [fatal parse-opts write-file Eprintln]]
             ["stream" :as stream]
             #_["dockerode$default" :as Docker]
             ))
@@ -23,6 +23,7 @@ Usage:
 Options:
   --continue-on-error           Continue running tests, even if one fails
   --quiet                       Only print final totals
+  --verbose                     Show live stdout/stderr from test commands
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
   --schema-file SCHEMA          Path to schema file [env: DCTEST_SCHEMA]
                                 [default: ./schema.yaml]
@@ -55,26 +56,33 @@ Options:
   "[Async] Exec a command in a container and wait for it to complete
   (using wait-exec). Resolves to exec data with additional :Stdout and
   and :Stderr keys."
-  [container command options]
+  [container command {:keys [verbose] :as options}]
   (P/let [cmd (if (string? command)
                 ["sh" "-c" command]
                 command)
           opts (merge {:AttachStdout true :AttachStderr true}
-                      options
+                      (dissoc options :verbose)
                       {:Cmd cmd})
           exec (.exec container (clj->js opts))
           stream (.start exec)
           stdout (atom [])
           stderr (atom [])
           stdout-stream (doto (stream/PassThrough.)
-                          (.on "data" #(swap! stdout conj %)))
+                          (.on "data" #(let [s (.toString % "utf8")]
+                                         (swap! stdout conj s)
+                                         (when verbose
+                                           (println (indent s "       "))))))
           stderr-stream (doto (stream/PassThrough.)
-                          (.on "data" #(swap! stderr conj %)))
+                          (.on "data" #(let [s (.toString % "utf8")]
+                                         (swap! stderr conj s)
+                                         (when verbose
+                                           (Eprintln (indent s "       "))))))
+          _ (when verbose (println (indent command "       ")))
           _ (-> (.-modem container)
                 (.demuxStream stream stdout-stream stderr-stream))
           data (wait-exec exec)
-          stdout (S/join "" (map #(.toString % "utf8") @stdout))
-          stderr (S/join "" (map #(.toString % "utf8") @stderr))
+          stdout (S/join "" @stdout)
+          stderr (S/join "" @stderr)
           result (assoc (->clj data) :Stdout stdout :Stderr stderr)]
     result))
 
@@ -104,7 +112,7 @@ Options:
 
 (defn execute-step* [context step]
   (P/let [{:keys [docker opts]} context
-          {:keys [project]} opts
+          {:keys [project verbose]} opts
           {service :exec index :index command :run} step
           {:keys [interval retries]} (:repeat step)
           env (merge (:env context) (:env step))
@@ -121,7 +129,8 @@ Options:
                                    (throw (ex-info (str "No container found for service '" service "' (index=" index ")")
                                                    {})))
                                env (mapv (fn [[k v]] (str k "=" v)) env)
-                               result (P/then (docker-exec container command {:Env env})
+                               result (P/then (docker-exec container command {:Env env
+                                                                              :verbose verbose})
                                               ->clj)]
                          (run-expect! result)
                          {:result result})
@@ -277,7 +286,10 @@ Options:
 
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
-          {:keys [continue-on-error quiet project test-suite]} opts
+          {:keys [continue-on-error quiet verbose project test-suite]} opts
+          _ (when (and quiet verbose)
+              (throw (ex-info (str "--quiet and --verbose are incompatible")
+                              {})))
 
           suites (P/all
                    (for [path test-suite]
@@ -287,7 +299,8 @@ Options:
                            context {:docker (Docker.)
                                     :env {}
                                     :opts {:project project
-                                           :quiet quiet}
+                                           :quiet quiet
+                                           :verbose verbose}
                                     :strategy {:continue-on-error continue-on-error}}
                            results []]
                     (if (or (empty? suites)

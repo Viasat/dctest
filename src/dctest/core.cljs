@@ -5,10 +5,10 @@
   (:require [cljs-bean.core :refer [->clj]]
             [clojure.edn :as edn]
             [clojure.string :as S]
-            [clojure.pprint :refer [pprint]]
-            [dctest.util :as util :refer [fatal obj->str log]]
+            [dctest.util :as util :refer [obj->str log]]
             [promesa.core :as P]
             [viasat.retry :as retry]
+            [viasat.util :refer [fatal parse-opts write-file]]
             ["stream" :as stream]
             #_["dockerode$default" :as Docker]
             ))
@@ -232,7 +232,7 @@ Options:
 
 (defn write-results-file [opts summary]
   (when-let [path (:results-file opts)]
-    (util/write-file path (obj->str summary))))
+    (write-file path (obj->str summary))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Load Suite
@@ -274,7 +274,7 @@ Options:
 ;; Main
 
 (defn -main [& argv]
-  (P/let [opts (util/parse-opts usage (or argv #js []))
+  (P/let [opts (parse-opts usage (or argv #js []))
           {:keys [continue-on-error quiet project test-suite]} opts
 
           suites (P/all

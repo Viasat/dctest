@@ -21,6 +21,10 @@ tests:
         run: echo 'inside node1' && hostname && pwd
       - exec: :host
         run: echo 'outside compose' && hostname && pwd
+      - exec: node1
+        run: ["echo", "array", "of", "arguments"]
+      - exec: :host
+        run: ["echo", "array", "of", "arguments"]
 
   fail-exit-code:
     name: Failing due to non-zero exit code

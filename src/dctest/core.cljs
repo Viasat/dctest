@@ -36,12 +36,15 @@ Options:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generic command execution
 
-(defn outer-spawn [cmd {:keys [env stdout stderr] :as opts}]
+(defn outer-spawn [command {:keys [env stdout stderr] :as opts}]
   (P/create
     (fn [resolve reject]
-      (let [cp-opts (merge {:stdio "pipe" :shell true}
+      (let [[cmd args shell] (if (string? command)
+                               [command nil true]
+                               [(first command) (rest command) false])
+            cp-opts (merge {:stdio "pipe" :shell shell}
                            (dissoc opts :stdout :stderr))
-            child (doto (cp/spawn cmd (clj->js cp-opts))
+            child (doto (cp/spawn cmd (clj->js args) (clj->js cp-opts))
                     (.on "close" (fn [code signal]
                                    (if (= 0 code)
                                      (resolve {:code code})
@@ -145,7 +148,7 @@ Options:
                                          (swap! stderr conj s)
                                          (when verbose
                                            (Eprintln (indent s "       "))))))
-          _ (when verbose (println (indent command "       ")))
+          _ (when verbose (println (indent (str command) "       ")))
           cmd-opts {:env env
                     :stdout stdout-stream
                     :stderr stderr-stream}

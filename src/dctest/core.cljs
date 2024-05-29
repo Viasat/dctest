@@ -25,7 +25,7 @@ Usage:
 Options:
   --continue-on-error           Continue running tests, even if one fails
   --quiet                       Only print final totals
-  --verbose                     Show live stdout/stderr from test commands
+  --verbose-commands            Show live stdout/stderr from test commands
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
   --schema-file SCHEMA          Path to schema file [env: DCTEST_SCHEMA]
                                 [default: ./schema.yaml]
@@ -130,7 +130,7 @@ Options:
 
 (defn execute-step* [context step]
   (P/let [{:keys [docker opts]} context
-          {:keys [project verbose]} opts
+          {:keys [project verbose-commands]} opts
           {target :exec index :index command :run} step
           {:keys [interval retries]} (:repeat step)
           env (merge (:env context) (:env step))
@@ -141,14 +141,14 @@ Options:
           stdout-stream (doto (stream/PassThrough.)
                           (.on "data" #(let [s (.toString % "utf8")]
                                          (swap! stdout conj s)
-                                         (when verbose
+                                         (when verbose-commands
                                            (println (indent s "       "))))))
           stderr-stream (doto (stream/PassThrough.)
                           (.on "data" #(let [s (.toString % "utf8")]
                                          (swap! stderr conj s)
-                                         (when verbose
+                                         (when verbose-commands
                                            (Eprintln (indent s "       "))))))
-          _ (when verbose (println (indent (str command) "       ")))
+          _ (when verbose-commands (println (indent (str command) "       ")))
           cmd-opts {:env env
                     :stdout stdout-stream
                     :stderr stderr-stream}
@@ -312,10 +312,7 @@ Options:
 
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
-          {:keys [continue-on-error quiet verbose project test-suite]} opts
-          _ (when (and quiet verbose)
-              (throw (ex-info (str "--quiet and --verbose are incompatible")
-                              {})))
+          {:keys [continue-on-error quiet verbose-commands project test-suite]} opts
           _ (when (empty? test-suite)
               (Eprintln (str "WARNING: no test-suite was specified")))
 
@@ -328,7 +325,7 @@ Options:
                                     :env {}
                                     :opts {:project project
                                            :quiet quiet
-                                           :verbose verbose}
+                                           :verbose-commands verbose-commands}
                                     :strategy {:continue-on-error continue-on-error}}
                            results []]
                     (if (or (empty? suites)

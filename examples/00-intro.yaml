@@ -2,7 +2,7 @@ name: Example Suite
 
 tests:
 
-  test-1:
+  passing:
     name: Passing test
     steps:
       - exec: node1
@@ -14,29 +14,29 @@ tests:
           [ "${FOO}" == "bar" ]
         repeat: { retries: 3, interval: '1s' }
 
-  test-2:
-    name: Inside and outside
+  inside-outside:
+    name: Inside and outside test
     steps:
       - exec: node1
         run: echo 'inside node1' && hostname && pwd
       - exec: :host
         run: echo 'outside compose' && hostname && pwd
 
-  test-3:
-    name: Failing test
+  fail-exit-code:
+    name: Failing due to non-zero exit code
     steps:
       - exec: node1
         run: /bin/false
       - exec: node1
         run: echo 'This step is skipped'
 
-  test-4:
+  maybe-skipped:
     name: Skipped test (unless running with --continue-on-error)
     steps:
       - exec: node1
         run: /bin/true
 
-  test-5:
+  fail-nonexistent-container:
     name: Test nonexistent container
     steps:
       - exec: node2

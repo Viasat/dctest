@@ -19,7 +19,10 @@
 ;; General functions
 
 (defn obj->str [obj]
-  (js/JSON.stringify (clj->js obj)))
+  (js/JSON.stringify (clj->js obj)
+                     (fn [k v] (if (instance? js/Error v)
+                                 (ex-message v)
+                                 v))))
 
 (defn log [opts & args]
   (when-not (:quiet opts)

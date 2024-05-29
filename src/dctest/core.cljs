@@ -5,6 +5,7 @@
   (:require [cljs-bean.core :refer [->clj]]
             [clojure.edn :as edn]
             [clojure.string :as S]
+            [clojure.walk :refer [postwalk]]
             [dctest.util :as util :refer [obj->str log indent]]
             [promesa.core :as P]
             [viasat.retry :as retry]
@@ -26,6 +27,7 @@ Options:
   --continue-on-error           Continue running tests, even if one fails
   --quiet                       Only print final totals
   --verbose-commands            Show live stdout/stderr from test commands
+  --verbose-results             Verbose results file (with errors, output, etc)
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
   --schema-file SCHEMA          Path to schema file [env: DCTEST_SCHEMA]
                                 [default: ./schema.yaml]
@@ -155,37 +157,27 @@ Options:
           run-exec (if (contains? #{:host ":host"} target)
                      #(outer-exec command cmd-opts)
                      #(compose-exec docker project target index command cmd-opts))
-          exec (retry/retry-times #(P/catch
-                                     (P/let [res (run-exec)]
-                                       {:result res})
-                                     (fn [err]
-                                       {:error (.-message err)}))
-                                  retries
-                                  {:delay-ms interval
-                                   :check-fn :result})]
-    (when-let [msg (:error exec)]
-      (throw (ex-info msg {})))
-
-    (merge
-      context
-      exec
-      {:result {:stdout (S/join "" @stdout)
-                :stderr (S/join "" @stderr)}})))
+          result (retry/retry-times #(P/catch
+                                       (P/let [res (run-exec)]
+                                         {:result res})
+                                       (fn [err]
+                                         {:error err}))
+                                    retries
+                                    {:delay-ms interval
+                                     :check-fn :result})]
+    (merge result
+           {:stdout (S/join "" @stdout)
+            :stderr (S/join "" @stderr)})))
 
 (defn execute-step [context step]
   (P/let [{step-name :name} step
 
-          {:keys [context outcome error]}
-          , (if (get-in context [:state :failed])
-              {:context context :outcome :skip}
-              (-> (P/let [context (execute-step* context step)]
-                    {:context context :outcome :pass})
-                  (P/catch
-                    (fn [err]
-                      {:context context :outcome :fail :error (.-message err)}))))
-          results (merge {:outcome outcome}
-                         (when step-name {:name step-name})
-                         (when error {:error error}))
+          result (if (get-in context [:state :failed])
+                   {:outcome :skip}
+                   (P/let [result (execute-step* context step)]
+                     (assoc result :outcome (if (:error result) :fail :pass))))
+          results (merge result
+                         (when step-name {:name step-name}))
           context (update-in context [:state :failed] #(or % (failure? results)))]
     {:context context
      :results results}))
@@ -214,13 +206,11 @@ Options:
           steps (execute-steps context (:steps test))
           results (:results steps)
           outcome (if (some failure? results) :fail :pass)
-          error (->> (filter failure? results)
-                     first
-                     :error)]
+          error (first (filter failure? results))]
     (merge {:outcome outcome
             :steps results}
            (when test-name {:name test-name})
-           (when error {:error error}))))
+           (when error {:error (:error error)}))))
 
 (defn run-suite [context suite]
   (log (:opts context) "  " (:name suite))
@@ -245,23 +235,31 @@ Options:
      :name (:name suite)
      :tests results}))
 
-(defn summarize [results]
+(def VERBOSE-SUMMARY-KEYS [:result :stdout :stderr])
+
+(defn summarize [results verbose-results]
   ;; Note: Suite can fail in setup/teardown, when all tests pass
   (let [overall (if (some failure? results) :fail :pass)
-        test-totals (frequencies (map :outcome (mapcat :tests results)))]
+        test-totals (frequencies (map :outcome (mapcat :tests results)))
+        results-data (if verbose-results
+                       results
+                       (postwalk #(if (map? %)
+                                    (apply dissoc % VERBOSE-SUMMARY-KEYS)
+                                    %)
+                                 results))]
     (merge {:pass 0 :fail 0}
            test-totals
-           {:outcome overall :results results})))
+           {:outcome overall :results results-data})))
 
 (defn print-results [opts summary]
   (doseq [suite (:results summary)]
     (doseq [[index {test-name :name
-                    error-msg :error}]
+                    error :error}]
             , (->> (:tests suite)
                    (filter failure?)
                    (map-indexed vector))]
       (log opts "  " (inc index) ")" test-name)
-      (log opts "     " error-msg)
+      (log opts "     " (.-message error))
       (log opts "")))
   (log opts
        (:pass summary) "passing,"
@@ -312,7 +310,8 @@ Options:
 
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
-          {:keys [continue-on-error quiet verbose-commands project test-suite]} opts
+          {:keys [continue-on-error project test-suite
+                  quiet verbose-commands verbose-results]} opts
           _ (when (empty? test-suite)
               (Eprintln (str "WARNING: no test-suite was specified")))
 
@@ -336,7 +335,7 @@ Options:
                               suite-results (run-suite context suite)
                               results (conj results suite-results)]
                         (P/recur suites context results))))
-          summary (summarize results)]
+          summary (summarize results verbose-results)]
 
     (write-results-file opts summary)
     (print-results opts summary)

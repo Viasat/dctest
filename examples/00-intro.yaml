@@ -30,6 +30,8 @@ tests:
     name: Failing due to non-zero exit code
     steps:
       - exec: node1
+        run: echo "some leading stdout"
+      - exec: node1
         run: /bin/false
       - exec: node1
         run: echo 'This step is skipped'

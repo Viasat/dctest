@@ -52,6 +52,18 @@ jobs:
             || true
           jq '[.pass == 2, .fail == 1] | all' examples/results.json
 
+      - name: Run Examples with --continue-on-error
+        run: |
+          # Some examples demonstate failure.
+          # Swallow exit code and check the result counts.
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd)/examples:/app/examples \
+            dctest --continue-on-error --results-file /app/examples/results.json examples /app/examples/00-intro.yaml \
+            || true
+          jq '[.pass == 3, .fail == 3] | all' examples/results.json
+
+
       - name: Setup Fixtures
         if: always()
         run: |

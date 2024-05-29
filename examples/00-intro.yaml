@@ -15,6 +15,14 @@ tests:
         repeat: { retries: 3, interval: '1s' }
 
   test-2:
+    name: Inside and outside
+    steps:
+      - exec: node1
+        run: echo 'inside node1' && hostname && pwd
+      - exec: :host
+        run: echo 'outside compose' && hostname && pwd
+
+  test-3:
     name: Failing test
     steps:
       - exec: node1
@@ -22,13 +30,13 @@ tests:
       - exec: node1
         run: echo 'This step is skipped'
 
-  test-3:
+  test-4:
     name: Skipped test (unless running with --continue-on-error)
     steps:
       - exec: node1
         run: /bin/true
 
-  test-4:
+  test-5:
     name: Test nonexistent container
     steps:
       - exec: node2

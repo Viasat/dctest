@@ -316,6 +316,8 @@ Options:
           _ (when (and quiet verbose)
               (throw (ex-info (str "--quiet and --verbose are incompatible")
                               {})))
+          _ (when (empty? test-suite)
+              (Eprintln (str "WARNING: no test-suite was specified")))
 
           suites (P/all
                    (for [path test-suite]

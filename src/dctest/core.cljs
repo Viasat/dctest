@@ -42,9 +42,10 @@ Options:
       (let [cp-opts (merge {:stdio "pipe" :shell true}
                            (dissoc opts :stdout :stderr))
             child (doto (cp/spawn cmd (clj->js cp-opts))
-                    (.on "close" #(if (= 0 %)
-                                    (resolve {:code %})
-                                    (reject {:code %}))))]
+                    (.on "close" (fn [code signal]
+                                   (if (= 0 code)
+                                     (resolve {:code code})
+                                     (reject {:code code :signal signal})))))]
         (when stdout (doto (.-stdout child) (.pipe stdout)))
         (when stderr (doto (.-stderr child) (.pipe stderr)))))))
 
@@ -52,8 +53,8 @@ Options:
   (P/catch
     (outer-spawn command opts)
     (fn [err]
-      (throw (ex-info (str "Non-zero exit code for command: " command)
-                      {:error err})))))
+      (throw (ex-info (str "Error running command: " (pr-str command))
+                      err)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Docker/Compose
@@ -87,8 +88,8 @@ Options:
                        (P/recur))
                      (P/-> data ->clj))))]
     (when-not (zero? (:ExitCode data))
-      (throw (ex-info (str "Non-zero exit code for command: " command)
-                      {})))
+      (throw (ex-info (str "Error running command: " (pr-str command))
+                      data)))
     data))
 
 (defn dc-service

@@ -9,7 +9,9 @@
             [promesa.core :as P]
             [viasat.retry :as retry]
             [viasat.util :refer [fatal parse-opts write-file Eprintln]]
+            ["util" :refer [promisify]]
             ["stream" :as stream]
+            ["child_process" :as cp]
             #_["dockerode$default" :as Docker]
             ))
 
@@ -32,59 +34,62 @@ Options:
 (set! *warn-on-infer* false)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Generic command execution
+
+(defn outer-spawn [cmd {:keys [env stdout stderr] :as opts}]
+  (P/create
+    (fn [resolve reject]
+      (let [cp-opts (merge {:stdio "pipe" :shell true}
+                           (dissoc opts :stdout :stderr))
+            child (doto (cp/spawn cmd (clj->js cp-opts))
+                    (.on "close" #(if (= 0 %)
+                                    (resolve {:code %})
+                                    (reject {:code %}))))]
+        (when stdout (doto (.-stdout child) (.pipe stdout)))
+        (when stderr (doto (.-stderr child) (.pipe stderr)))))))
+
+(defn outer-exec [command opts]
+  (P/catch
+    (outer-spawn command opts)
+    (fn [err]
+      (throw (ex-info (str "Non-zero exit code for command: " command)
+                      {:error err})))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Docker/Compose
 
 (def WAIT-EXEC-SLEEP 200)
-
-(defn wait-exec
-  "[Async] Wait for docker exec to complete and when complete resolve
-  to result of inspecting successful exec or reject with exec error."
-  [exec]
-  (P/create
-    (fn [resolve reject]
-      (let [check-fn (atom nil)
-            exec-cb (fn [err data]
-                      (if err (reject err)
-                        (if (.-Running data)
-                          (js/setTimeout @check-fn WAIT-EXEC-SLEEP)
-                          (resolve data))))]
-        (reset! check-fn (fn []
-                           (.inspect exec exec-cb)))
-        (@check-fn)))))
 
 (defn docker-exec
   "[Async] Exec a command in a container and wait for it to complete
   (using wait-exec). Resolves to exec data with additional :Stdout and
   and :Stderr keys."
-  [container command {:keys [verbose] :as options}]
+  [container command {:keys [env stdout stderr] :as opts}]
   (P/let [cmd (if (string? command)
                 ["sh" "-c" command]
                 command)
-          opts (merge {:AttachStdout true :AttachStderr true}
-                      (dissoc options :verbose)
-                      {:Cmd cmd})
-          exec (.exec container (clj->js opts))
+          stdout (or stdout (stream/PassThrough.))
+          stderr (or stderr (stream/PassThrough.))
+          env (mapv (fn [[k v]] (str k "=" v)) env)
+          exec-opts (merge {:AttachStdout true :AttachStderr true :Env env}
+                           (dissoc opts :env :stdout :stderr)
+                           {:Cmd cmd})
+          exec (.exec container (clj->js exec-opts))
           stream (.start exec)
-          stdout (atom [])
-          stderr (atom [])
-          stdout-stream (doto (stream/PassThrough.)
-                          (.on "data" #(let [s (.toString % "utf8")]
-                                         (swap! stdout conj s)
-                                         (when verbose
-                                           (println (indent s "       "))))))
-          stderr-stream (doto (stream/PassThrough.)
-                          (.on "data" #(let [s (.toString % "utf8")]
-                                         (swap! stderr conj s)
-                                         (when verbose
-                                           (Eprintln (indent s "       "))))))
-          _ (when verbose (println (indent command "       ")))
           _ (-> (.-modem container)
-                (.demuxStream stream stdout-stream stderr-stream))
-          data (wait-exec exec)
-          stdout (S/join "" @stdout)
-          stderr (S/join "" @stderr)
-          result (assoc (->clj data) :Stdout stdout :Stderr stderr)]
-    result))
+                (.demuxStream stream stdout stderr))
+          inspect-fn (.bind (promisify (.-inspect exec)) exec)
+          data (P/loop []
+                 (P/let [data (inspect-fn)]
+                   (if (.-Running data)
+                     (P/do
+                       (P/delay WAIT-EXEC-SLEEP)
+                       (P/recur))
+                     (P/-> data ->clj))))]
+    (when-not (zero? (:ExitCode data))
+      (throw (ex-info (str "Non-zero exit code for command: " command)
+                      {})))
+    data))
 
 (defn dc-service
   "[Async] Return the container for a docker compose service. If not
@@ -101,6 +106,15 @@ Options:
                              (.getContainer docker))]
     container))
 
+(defn compose-exec
+  [docker project service index command opts]
+  (P/let [container (dc-service docker project service index)]
+    (when-not container
+      (throw (ex-info (str "No container found for service "
+                           "'" service "' (index=" index ")")
+                      {})))
+    (docker-exec container command opts)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Test Runner
 
@@ -113,38 +127,46 @@ Options:
 (defn execute-step* [context step]
   (P/let [{:keys [docker opts]} context
           {:keys [project verbose]} opts
-          {service :exec index :index command :run} step
+          {target :exec index :index command :run} step
           {:keys [interval retries]} (:repeat step)
           env (merge (:env context) (:env step))
           index (or index 1)
 
-          run-expect! (fn [result]
-                        (when-not (zero? (:ExitCode result))
-                          (throw (ex-info (str "Non-zero exit code for command: " command)
-                                          {}))))
-          run-exec (fn []
-                     (P/catch
-                       (P/let [container (dc-service docker project service index)
-                               _ (when-not container
-                                   (throw (ex-info (str "No container found for service '" service "' (index=" index ")")
-                                                   {})))
-                               env (mapv (fn [[k v]] (str k "=" v)) env)
-                               result (P/then (docker-exec container command {:Env env
-                                                                              :verbose verbose})
-                                              ->clj)]
-                         (run-expect! result)
-                         {:result result})
-                       (fn [err]
-                         {:error (.-message err)})))
-          exec (retry/retry-times run-exec
+          stdout (atom [])
+          stderr (atom [])
+          stdout-stream (doto (stream/PassThrough.)
+                          (.on "data" #(let [s (.toString % "utf8")]
+                                         (swap! stdout conj s)
+                                         (when verbose
+                                           (println (indent s "       "))))))
+          stderr-stream (doto (stream/PassThrough.)
+                          (.on "data" #(let [s (.toString % "utf8")]
+                                         (swap! stderr conj s)
+                                         (when verbose
+                                           (Eprintln (indent s "       "))))))
+          _ (when verbose (println (indent command "       ")))
+          cmd-opts {:env env
+                    :stdout stdout-stream
+                    :stderr stderr-stream}
+          run-exec (if (contains? #{:host ":host"} target)
+                     #(outer-exec command cmd-opts)
+                     #(compose-exec docker project target index command cmd-opts))
+          exec (retry/retry-times #(P/catch
+                                     (P/let [res (run-exec)]
+                                       {:result res})
+                                     (fn [err]
+                                       {:error (.-message err)}))
                                   retries
                                   {:delay-ms interval
                                    :check-fn :result})]
-
     (when-let [msg (:error exec)]
       (throw (ex-info msg {})))
 
-    context))
+    (merge
+      context
+      exec
+      {:result {:stdout (S/join "" @stdout)
+                :stderr (S/join "" @stderr)}})))
 
 (defn execute-step [context step]
   (P/let [{step-name :name} step

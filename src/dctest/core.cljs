@@ -321,7 +321,7 @@ Options:
 
           results (P/loop [suites suites
                            context {:docker (Docker.)
-                                    :env {}
+                                    :env {"COMPOSE_PROJECT_NAME" project}
                                     :opts {:project project
                                            :quiet quiet
                                            :verbose-commands verbose-commands}

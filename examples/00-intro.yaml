@@ -1,5 +1,8 @@
 name: Example Suite
 
+env:
+  BAZ: ${{ 1 + 1 }}
+
 tests:
 
   passing:
@@ -25,6 +28,28 @@ tests:
         run: ["echo", "array", "of", "arguments"]
       - exec: :host
         run: ["echo", "array", "of", "arguments"]
+
+  expressions:
+    name: Expressions test
+    env:
+      BAR: ${{ 1 + 1 }}
+    steps:
+      - exec: node1
+        run: |
+          [ "2" == "${{ 1 + 1 }}" ]
+      - exec: node1
+        run: |
+          [ "2" == "${BAR}" ]
+      - exec: node1
+        env:
+          FOO: ${{ env.BAZ }}
+        run: |
+          [ "2" == "${{ env.FOO }}" ]
+      - exec: ${{ env.CONTAINER }}
+        env:
+          CONTAINER: node1
+        run: |
+          [ "" == "${FOO}" ]
 
   fail-exit-code:
     name: Failing due to non-zero exit code

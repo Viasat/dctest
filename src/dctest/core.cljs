@@ -6,6 +6,7 @@
             [clojure.edn :as edn]
             [clojure.string :as S]
             [clojure.walk :refer [postwalk]]
+            [dctest.expressions :as expr]
             [dctest.util :as util :refer [obj->str log indent]]
             [promesa.core :as P]
             [viasat.retry :as retry]
@@ -135,8 +136,17 @@ Options:
           {:keys [project verbose-commands]} opts
           {target :exec index :index command :run} step
           {:keys [interval retries]} (:repeat step)
-          env (merge (:env context) (:env step))
           index (or index 1)
+
+          ;; Interpolate step env before other keys
+          step-env (update-vals (:env step) #(expr/read-eval-print context %))
+          context (update context :env merge step-env)
+
+          interpolate #(expr/read-eval-print context %)
+          target (interpolate target)
+          command (if (string? command)
+                    (interpolate command)
+                    (mapv interpolate command))
 
           stdout (atom [])
           stderr (atom [])
@@ -151,7 +161,7 @@ Options:
                                          (when verbose-commands
                                            (Eprintln (indent s "       "))))))
           _ (when verbose-commands (println (indent (str command) "       ")))
-          cmd-opts {:env env
+          cmd-opts {:env (:env context)
                     :stdout stdout-stream
                     :stderr stderr-stream}
           run-exec (if (contains? #{:host ":host"} target)
@@ -200,9 +210,10 @@ Options:
 
 (defn run-test [context suite test]
   (P/let [test-name (:name test)
+          test-env (update-vals (:env test) #(expr/read-eval-print context %))
           context (-> context
                       (assoc-in [:state :failed] false)
-                      (update :env merge (:env test)))
+                      (update :env merge test-env))
           steps (execute-steps context (:steps test))
           results (:results steps)
           outcome (if (some failure? results) :fail :pass)
@@ -214,7 +225,8 @@ Options:
 
 (defn run-suite [context suite]
   (log (:opts context) "  " (:name suite))
-  (P/let [context (update context :env merge (:env suite))
+  (P/let [suite-env (update-vals (:env suite) #(expr/read-eval-print context %))
+          context (update context :env merge suite-env)
           results (P/loop [tests (vals (:tests suite))
                            context context
                            results []]

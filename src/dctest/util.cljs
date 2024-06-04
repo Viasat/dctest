@@ -23,6 +23,8 @@
                      (fn [k v] (if (instance? js/Error v)
                                  (ex-message v)
                                  v))))
+(defn js->map [obj]
+  (into {} (map js->clj (js/Object.entries obj))))
 
 (defn log [opts & args]
   (when-not (:quiet opts)

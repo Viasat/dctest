@@ -148,6 +148,9 @@
        "9"           "${{ env[env.foo].baz }}"     {"foo" "bar", "bar" {"baz" 9}}
        "9"           "${{ env [ env.foo ] .baz }}" {"foo" "bar", "bar" {"baz" 9}})
 
+  (is (= "123"
+         (expr/read-eval-print {:a {:b 123}} "${{ a.b }}")))
+
   ;; Documenting that this does not currently throw a ReferenceError
   (is (= "null"
          (expr/read-eval-print {} "${{ baz }}"))))

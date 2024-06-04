@@ -6,6 +6,7 @@
             [clojure.edn :as edn]
             [clojure.pprint :refer [pprint]]
             [clojure.string :as S]
+            [clojure.walk :refer [stringify-keys]]
             ["ebnf" :as ebnf]))
 
 (def stdlib
@@ -135,7 +136,7 @@ IDENTIFIER_PART  ::= [a-zA-Z0-9] | '$' | '_'
       "Property"         (eval (first children))
       "PropertyName"     text
       "Identifier"       (let [ident-name text
-                               context {"env" (:env context)}]
+                               context (stringify-keys context)]
                            (get-in context [ident-name]))
 
       "Value"   (eval (first children))

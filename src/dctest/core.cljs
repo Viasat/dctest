@@ -7,7 +7,7 @@
             [clojure.string :as S]
             [clojure.walk :refer [postwalk]]
             [dctest.expressions :as expr]
-            [dctest.util :as util :refer [obj->str log indent]]
+            [dctest.util :as util :refer [obj->str js->map log indent]]
             [promesa.core :as P]
             [viasat.retry :as retry]
             [viasat.util :refer [fatal parse-opts write-file Eprintln]]
@@ -320,6 +320,14 @@ Options:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Main
 
+(defn js-process []
+  (let [process (select-keys (js->map js/process)
+                             ["platform" "pid" "ppid" "argv"
+                              "versions" "features"])
+        env (into {} (js->map js/process.env))]
+    (merge process
+           {"env" env})))
+
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
           {:keys [continue-on-error project test-suite
@@ -334,6 +342,7 @@ Options:
           results (P/loop [suites suites
                            context {:docker (Docker.)
                                     :env {"COMPOSE_PROJECT_NAME" project}
+                                    :process (js-process)
                                     :opts {:project project
                                            :quiet quiet
                                            :verbose-commands verbose-commands}

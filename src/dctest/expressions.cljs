@@ -83,8 +83,17 @@ IDENTIFIER_PART  ::= [a-zA-Z0-9] | '$' | '_'
 (def parser
   (ebnf/Grammars.W3C.Parser. grammar))
 
-(defn get-ast [text]
-  (->clj (.getAST parser text "InterpolatedText")))
+(defn read-ast [text & [start]]
+  (let [start (or start "Expression")]
+    (->clj (.getAST parser text start))))
+
+(defn print-obj [obj]
+  (if (string? obj)
+    obj
+    (js/JSON.stringify (clj->js obj))))
+
+(defn print-objs [objs]
+  (S/join "" (map print-obj objs)))
 
 ;; 'parent' key returned by ebnf is circular (normal pprint causes stackoverflow)
 (defn pprint-ast [ast]
@@ -103,11 +112,8 @@ IDENTIFIER_PART  ::= [a-zA-Z0-9] | '$' | '_'
       (throw (ex-info "Parsing errors" errors)))
 
     (case type
-      "InterpolatedText"       (S/join "" (map eval children))
-      "InterpolatedExpression" (let [result (eval (first children))]
-                                 (if (string? result)
-                                   result
-                                   (js/JSON.stringify (clj->js result))))
+      "InterpolatedText"       (map eval children)
+      "InterpolatedExpression" (eval (first children))
 
       "PrintableChar"    text
       "Expression"       (eval (first (:children ast)))
@@ -157,6 +163,13 @@ IDENTIFIER_PART  ::= [a-zA-Z0-9] | '$' | '_'
       "Member" (let [[k v] children]
                  [(eval k) (eval v)]))))
 
+(defn read-eval
+  [context text]
+  (eval-ast context (read-ast text "Expression")))
+
 (defn read-eval-print
   [context text]
-  (eval-ast context (get-ast text)))
+  (print-obj (read-eval context text)))
+
+(defn interpolate-text [context text]
+  (print-objs (eval-ast context (read-ast text "InterpolatedText"))))

@@ -139,10 +139,10 @@ Options:
           index (or index 1)
 
           ;; Interpolate step env before other keys
-          step-env (update-vals (:env step) #(expr/read-eval-print context %))
+          step-env (update-vals (:env step) #(expr/interpolate-text context %))
           context (update context :env merge step-env)
 
-          interpolate #(expr/read-eval-print context %)
+          interpolate #(expr/interpolate-text context %)
           target (interpolate target)
           command (if (string? command)
                     (interpolate command)
@@ -210,7 +210,7 @@ Options:
 
 (defn run-test [context suite test]
   (P/let [test-name (:name test)
-          test-env (update-vals (:env test) #(expr/read-eval-print context %))
+          test-env (update-vals (:env test) #(expr/interpolate-text context %))
           context (-> context
                       (assoc-in [:state :failed] false)
                       (update :env merge test-env))
@@ -225,7 +225,7 @@ Options:
 
 (defn run-suite [context suite]
   (log (:opts context) "  " (:name suite))
-  (P/let [suite-env (update-vals (:env suite) #(expr/read-eval-print context %))
+  (P/let [suite-env (update-vals (:env suite) #(expr/interpolate-text context %))
           context (update context :env merge suite-env)
           results (P/loop [tests (vals (:tests suite))
                            context context

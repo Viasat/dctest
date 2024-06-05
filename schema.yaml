@@ -35,6 +35,7 @@ properties:
               env:  { "$ref": "#/$defs/env" }
               exec: { type: string }
               name: { type: string }
+              index: { type: integer }
               run:
                 oneOf:
                   - { type: string}

@@ -3,4 +3,5 @@
             [dctest.expressions-test]
             ))
 
-(run-all-tests #"dctest\..*")
+(defn -main []
+  (run-all-tests #"dctest\..*"))

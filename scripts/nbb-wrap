@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+die() { echo >&2 "${*}"; exit 1; }
+
+TOP=$(node -e "console.log(require('path').resolve(require.resolve('nbb') + '/../../../'))" 2>/dev/null)
+[ "${TOP}" ] || die "Could not locate 'nbb' module."
+NBB=${TOP}/node_modules/.bin/nbb
+[ -e "${NBB}" ] || die "No '${NBB}' found."
+if [ -d "${TOP}/src/dctest" ]; then
+  DCTEST="${TOP}"
+else
+  DCTEST=$(node -e "console.log(require('path').resolve(require.resolve('@lonocloud/dctest') + '/../'))" 2>/dev/null)
+fi
+[ "${DCTEST}" ] || die "Could not locate 'dctest' module directory."
+[ -d "${DCTEST}/src" ] || die "No directory at ${DCTEST}/src"
+NBB_CP="${DCTEST}/src:${DCTEST}/test:${NBB_CP}:${TOP}/node_modules/@lonocloud/cljs-utils/src"
+
+case "$(basename "${0}")" in
+  dctest)   MAIN=dctest.core ;;
+  runtests) MAIN=runtests ;;
+esac
+
+DCTEST_SCHEMA="${DCTEST_SCHEMA:-${DCTEST}/schema.yaml}" \
+  NODE_PATH="${TOP}/node_modules/" exec ${NBB} -cp "${NBB_CP}" \
+  -m "${MAIN}" "${@}"

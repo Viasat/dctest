@@ -15,9 +15,9 @@
 (def stdlib
   {
    ;; Test status functions
-   "always"  (constantly true)
-   "success" #(not (get-in % [:state :failed]))
-   "failure" #(boolean (get-in % [:state :failed]))
+   "always"  {:arity 0 :fn (constantly true)}
+   "success" {:arity 0 :fn #(not (get-in % [:state :failed]))}
+   "failure" {:arity 0 :fn #(boolean (get-in % [:state :failed]))}
    })
 
 (def BEGIN_INTERP "${{")
@@ -116,6 +116,19 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                       [{:message (str "Invalid Expression at position " pos)}]))
                   positions)))
 
+      "FunctionCall"
+      (let [[func & args] children
+            func-name (:text func)
+            func (get stdlib func-name)]
+        (cond
+          (not func)
+          [{:message (str "ReferenceError: " func-name " is not supported")}]
+
+          (not= (count args) (:arity func))
+          [{:message (str "ArityError: incorrect number of arguments to " func-name)}]
+
+          :else nil))
+
       ;; else
       nil)))
 
@@ -197,9 +210,7 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                              "/"  (/ (eval a) (eval b))))
 
       "FunctionCall"     (let [[func & args] children
-                               func (get stdlib (:text func))
-                               _ (when-not func
-                                   (throw (ex-info (str "ReferenceError: " (:text func) " is not defined") {})))
+                               func (get-in stdlib [(:text func) :fn])
                                args (mapv eval args)]
                            (apply func context args))
       "MemberExpression" (let [[ident & props] children

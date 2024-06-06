@@ -154,8 +154,8 @@
        "always(1)" [{:message "ArityError: incorrect number of arguments to always"}]
        "foo()"     [{:message "ReferenceError: foo is not supported"}]))
 
-(deftest test-identifiers
-  ;; env support
+(deftest test-contexts
+  ;; Supported access patterns
   (are [expected text env] (= expected (expr/read-eval {:env env} text))
        {"foo" 3} "env"                  {"foo" 3}
        3         "env.foo"              {"foo" 3}
@@ -166,9 +166,20 @@
        9         "env[env.foo].baz"     {"foo" "bar", "bar" {"baz" 9}}
        9         "env [ env.foo ] .baz" {"foo" "bar", "bar" {"baz" 9}})
 
-  (is (= 123
-         (expr/read-eval {:a {:b {:c 123}}} "a.b.c")))
+  ;; Supported contexts
+  (let [contexts {:env {"FOO" 1}
+                  :process {"pid" 123}}]
+    (are [expected text] (= expected (expr/read-eval contexts text))
+         1   "env.FOO"
+         123 "process.pid"))
 
-  ;; Documenting that this does not currently throw a ReferenceError
-  (is (= nil
-         (expr/read-eval {} "baz"))))
+  ;; Coerce keywords to strings inside context
+  (is (= 123
+         (expr/read-eval {:env {:a {:b 123}}} "env.a.b")))
+
+  ;; Reference errors
+  (let [invalid "${{ baz }}"]
+    (is (thrown-with-msg? js/Error #"Unchecked errors"
+                          (expr/interpolate-text {} invalid)))
+    (is (= [{:message "ReferenceError: baz is not supported"}]
+           (expr/flatten-errors (expr/read-ast invalid "InterpolatedText"))))))

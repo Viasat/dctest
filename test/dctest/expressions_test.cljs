@@ -144,10 +144,15 @@
        false {:failed false}
        true {:failed true})
 
-  ;; Documenting that functions currently do not throw if given too many arguments
-  (is (= true
-         (expr/read-eval {:state {:failed true}} "always(1)"))))
+  ;; Check function names/args
+  (are [text] (thrown-with-msg? js/Error #"Unchecked errors"
+                                (expr/read-eval {:state {:failed false}} text))
+       "always(1)"
+       "foo()")
 
+  (are [text errors] (= errors (expr/flatten-errors (expr/read-ast text "Expression")))
+       "always(1)" [{:message "ArityError: incorrect number of arguments to always"}]
+       "foo()"     [{:message "ReferenceError: foo is not supported"}]))
 
 (deftest test-identifiers
   ;; env support

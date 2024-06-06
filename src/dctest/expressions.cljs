@@ -7,7 +7,10 @@
             [clojure.pprint :refer [pprint]]
             [clojure.string :as S]
             [clojure.walk :refer [stringify-keys]]
+            [clojure.zip :as zip]
             ["ebnf" :as ebnf]))
+
+(declare read-ast)
 
 (def stdlib
   {
@@ -17,25 +20,31 @@
    "failure" #(boolean (get-in % [:state :failed]))
    })
 
+(def BEGIN_INTERP "${{")
+
+(defn interp-positions [text]
+  (loop [results []
+         pos 0]
+    (if-let [pos (S/index-of text BEGIN_INTERP pos)]
+      (recur (conj results pos)
+             (+ pos (count BEGIN_INTERP)))
+      results)))
+
 ;; ALL_CAPS nodes are not returned in ast
 ;; See also: https://www.ietf.org/rfc/rfc4627.txt
 (def grammar
   "
-InterpolatedText ::= ( InterpolatedExpression | PrintableChar )*
-
-InterpolatedExpression ::= BEGIN_INTERP WHITESPACE* Expression WHITESPACE* END_INTERP
-BEGIN_INTERP           ::= '${{'
-END_INTERP             ::= '}}'
-WHITESPACE             ::= [#x20#x09#x0A#x0D]+   /* Space | Tab | \\n | \\r */
-
-PrintableChar ::= #x0009 | #x000A | #x000D | [#x0020-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+InterpolatedText       ::= ( InterpolatedExpression | PrintableChar )*
+InterpolatedExpression ::= BEGIN_INTERP Expression END_INTERP
+BEGIN_INTERP ::= '${{'
+END_INTERP   ::= '}}'
 
 Expression ::= BinaryExpression | UnaryExpression
 
-BinaryExpression ::= WHITESPACE* UnaryExpression WHITESPACE* BinOp WHITESPACE* Expression WHITESPACE*
+BinaryExpression ::= UnaryExpression BinOp Expression
 BinOp ::= '&&' | '||' | '+' | '-' | '*' | '/'
 
-UnaryExpression ::= Value | FunctionCall | MemberExpression | Identifier | ParensExpression
+UnaryExpression  ::= WHITESPACE* (Value | FunctionCall | MemberExpression | Identifier | ParensExpression) WHITESPACE*
 ParensExpression ::= BEGIN_PAREN_EXPR Expression END_PAREN_EXPR
 BEGIN_PAREN_EXPR ::= WHITESPACE* '(' WHITESPACE*
 END_PAREN_EXPR   ::= WHITESPACE* ')' WHITESPACE*
@@ -78,14 +87,72 @@ END_PROP_BRACK   ::= WHITESPACE* ']' WHITESPACE*
 Identifier       ::= IDENTIFIER_START IDENTIFIER_PART*
 IDENTIFIER_START ::= [a-zA-Z] | '$' | '_'
 IDENTIFIER_PART  ::= [a-zA-Z0-9] | '$' | '_'
+
+PrintableChar ::= #x0009 | #x000A | #x000D | [#x0020-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+WHITESPACE    ::= [#x20#x09#x0A#x0D]+   /* Space | Tab | \\n | \\r */
+
+/* Used for error reporting, not evaluated directly */
+ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
   ")
 
 (def parser
   (ebnf/Grammars.W3C.Parser. grammar))
 
+(defn semantic-errors [ast]
+  (let [{:keys [children text type]} ast]
+    (case type
+
+      "InterpolatedText"
+      (let [positions (interp-positions text)
+            expressions (filter #(= "InterpolatedExpression" (:type %)) children)]
+        (when-not (= (count positions)
+                     (count expressions))
+          ;; Provide location of unparseable/unclosed expressions
+          (mapcat (fn [pos]
+                    (when-not (-> (subs text pos)
+                                  (read-ast "ExpectedInterpolation")
+                                  :children
+                                  first)
+                      [{:message (str "Invalid Expression at position " pos)}]))
+                  positions)))
+
+      ;; else
+      nil)))
+
+(defn ast-zipper [ast]
+  (zip/zipper
+    #(and (map? %) (:type %))
+    :children
+    #(assoc %1 :children %2)
+    ast))
+
+(defn check-ast [ast]
+  (loop [loc (ast-zipper ast)]
+    (if (zip/end? loc)
+      (zip/root loc)
+      (let [node (zip/node loc)
+            errors (semantic-errors node)
+            loc (if (seq errors)
+                  (zip/replace loc (update node :errors #(into errors %)))
+                  loc)]
+        (recur (zip/next loc))))))
+
+(defn flatten-errors [ast]
+  (loop [loc (ast-zipper ast)
+         state []]
+    (if (zip/end? loc)
+      state
+      (let [state (into state (:errors (zip/node loc)))]
+        (recur (zip/next loc)
+               state)))))
+
 (defn read-ast [text & [start]]
-  (let [start (or start "Expression")]
-    (->clj (.getAST parser text start))))
+  (let [start (or start "Expression")
+        ;; Ensure type/text are present, if ebnf can't parse
+        ;; Rely on check-ast to flag issues
+        ast (merge {:type start :text text}
+                   (->clj (.getAST parser text start)))]
+    (check-ast ast)))
 
 (defn print-obj [obj]
   (if (string? obj)
@@ -109,7 +176,7 @@ IDENTIFIER_PART  ::= [a-zA-Z0-9] | '$' | '_'
         {:keys [children errors text type]} ast]
 
     (when (seq errors)
-      (throw (ex-info "Parsing errors" errors)))
+      (throw (ex-info "Unchecked errors" errors)))
 
     (case type
       "InterpolatedText"       (map eval children)

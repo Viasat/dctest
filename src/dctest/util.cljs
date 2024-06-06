@@ -6,6 +6,7 @@
     [cljs-bean.core :refer [->clj ->js]]
     [clojure.string :as S]
     [clojure.pprint :refer [pprint]]
+    [dctest.expressions :as expr]
     [promesa.core :as P]
     [viasat.util :refer [Eprintln fatal read-file]]
     ["js-yaml" :as yaml]
@@ -61,8 +62,28 @@
          " " (:message error)
          (if (not (empty? params)) (str " " params) ""))))
 
+;; Validation functions return a boolean and define custom error messages as an
+;; array via setting a a property on the function itself.
+;; https://ajv.js.org/keywords.html#define-keyword-with-validate-function
+(defn validate-expression
+  [schema data]
+  (let [errors (expr/flatten-errors (expr/read-ast data schema))]
+    (if (empty? errors)
+      true
+      (do
+        (set! (.-errors validate-expression) (->js errors))
+        false))))
+
+;; { type: <type>, expressionType: <schemaType> }
+(def expression-keyword
+  {:keyword "expression"
+   :type "string"
+   :schemaType "string"
+   :validate validate-expression})
+
 (defn check-schema [data schema verbose]
-  (let [ajv (Ajv. #js {:allErrors true :coerceTypes true :useDefaults true})
+  (let [ajv (doto (Ajv. #js {:allErrors true :coerceTypes true :strict true :useDefaults true})
+              (.addKeyword (->js expression-keyword)))
         validator (.compile ajv (->js schema))
         valid (validator (->js data))]
     (if valid

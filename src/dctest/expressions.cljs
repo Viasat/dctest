@@ -12,6 +12,9 @@
 
 (declare read-ast)
 
+(def supported-contexts
+  #{"env" "process"})
+
 (def stdlib
   {
    ;; Test status functions
@@ -44,7 +47,7 @@ Expression ::= BinaryExpression | UnaryExpression
 BinaryExpression ::= UnaryExpression BinOp Expression
 BinOp ::= '&&' | '||' | '+' | '-' | '*' | '/'
 
-UnaryExpression  ::= WHITESPACE* (Value | FunctionCall | MemberExpression | Identifier | ParensExpression) WHITESPACE*
+UnaryExpression  ::= WHITESPACE* (Value | FunctionCall | MemberExpression | ContextName | ParensExpression) WHITESPACE*
 ParensExpression ::= BEGIN_PAREN_EXPR Expression END_PAREN_EXPR
 BEGIN_PAREN_EXPR ::= WHITESPACE* '(' WHITESPACE*
 END_PAREN_EXPR   ::= WHITESPACE* ')' WHITESPACE*
@@ -77,7 +80,8 @@ BEGIN_FUNC_ARGS ::= '('
 SEP_FUNC_ARGS   ::= WHITESPACE* ',' WHITESPACE*
 END_FUNC_ARGS   ::= ')'
 
-MemberExpression ::= Identifier Property+
+MemberExpression ::= ContextName Property+
+ContextName      ::= Identifier
 Property         ::= SEP_PROP_DOT PropertyName | BEGIN_PROP_BRACK Expression END_PROP_BRACK
 PropertyName     ::= Identifier
 SEP_PROP_DOT     ::= WHITESPACE* '.' WHITESPACE*
@@ -128,6 +132,10 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
           [{:message (str "ArityError: incorrect number of arguments to " func-name)}]
 
           :else nil))
+
+      "ContextName"
+      (when-not (contains? supported-contexts text)
+        [{:message (str "ReferenceError: " text " is not supported")}])
 
       ;; else
       nil)))
@@ -213,15 +221,15 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                                func (get-in stdlib [(:text func) :fn])
                                args (mapv eval args)]
                            (apply func context args))
-      "MemberExpression" (let [[ident & props] children
-                               ident (eval ident)
+      "MemberExpression" (let [[context & props] children
+                               context (eval context)
                                props (mapv eval props)]
-                           (get-in ident props))
-      "Property"         (eval (first children))
-      "PropertyName"     text
-      "Identifier"       (let [ident-name text
+                           (get-in context props))
+      "ContextName"      (let [ident-name text
                                context (stringify-keys context)]
                            (get-in context [ident-name]))
+      "Property"         (eval (first children))
+      "PropertyName"     text
 
       "Value"   (eval (first children))
       "Null"    nil

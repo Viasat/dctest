@@ -3,7 +3,7 @@ $defs:
   env:
     type: object
     propertyNames: { type: string }
-    additionalProperties: { type: string }
+    additionalProperties: { type: string, expression: InterpolatedText }
 
 # suite
 type: object
@@ -33,13 +33,13 @@ properties:
             required: [ exec, run ]
             properties:
               env:  { "$ref": "#/$defs/env" }
-              exec: { type: string }
+              exec: { type: string, expression: InterpolatedText }
               name: { type: string }
               index: { type: integer }
               run:
                 oneOf:
-                  - { type: string}
-                  - { type: array, items: { type: string } }
+                  - { type: string, expression: InterpolatedText }
+                  - { type: array, items: { type: string, expression: InterpolatedText } }
               repeat:
                 type: object
                 additionalProperties: false

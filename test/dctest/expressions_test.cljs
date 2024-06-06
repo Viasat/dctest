@@ -3,23 +3,35 @@
             [dctest.expressions :as expr]))
 
 (deftest test-basic-interpolation
+
+  ;; Interpolate expressions inside ${{ ... }}
   (are [expected text] (= expected (expr/interpolate-text {} text))
-       "this is true."      "this is ${{true}}."
-       "this is false."     "this is ${{false}}."
-       "before true"        "before ${{ true }}"
-       "true after"         "${{ true }} after"
-       "true then false"    "${{ true }} then ${{ false }}"
-       ;; don't interpolate
-       "this is ${true}."   "this is ${true}."
-       "this is {true}."    "this is {true}."
-       "this is ${true}}."  "this is ${true}}."
-       "this is $ {true}."  "this is $ {true}."
-       "this is $ {true}}." "this is $ {true}}.")
+       "this is true."   "this is ${{true}}."
+       "this is false."  "this is ${{false}}."
+       "before true"     "before ${{ true }}"
+       "true after"      "${{ true }} after"
+       "true then false" "${{ true }} then ${{ false }}")
 
-  ;; Documenting that unclosed escape sequences are currently returned as text
-  (is (= "this is ${{true}."
-         (expr/interpolate-text {} "this is ${{true}."))))
+  ;; Don't disrupt ${}-like shell commands/expressions
+  (are [text] (= text (expr/interpolate-text {} text))
+       "this is ${true}."
+       "this is {true}."
+       "this is ${true}}."
+       "this is $ {true}."
+       "this is $ {true}}.")
 
+  ;; Always expect ${{ to indicate a valid expression
+  (are [text errors] (expr/flatten-errors (expr/read-ast text "InterpolatedText"))
+       "this is ${{true}."               [{:message "Invalid Expression at position 8"}]
+       "this is ${{true}} and ${{true}." [{:message "Invalid Expression at position 22"}]
+       "this is ${{ 1 + }}."             [{:message "Invalid Expression at position 8"}])
+
+  ;; Throw at eval/run-time, if undetected at load/parse-time
+  (are [text] (thrown-with-msg? js/Error #"Unchecked errors"
+                                (expr/interpolate-text {} text))
+       "this is ${{true}."
+       "this is ${{ 1 + }}."
+       "this is ${{true}} and ${{true}."))
 
 (deftest test-literals-interpolation
   ;; roundtrip
@@ -155,10 +167,3 @@
   ;; Documenting that this does not currently throw a ReferenceError
   (is (= nil
          (expr/read-eval {} "baz"))))
-
-
-(deftest test-error-handling
-  ;; Documenting that current parser will not interpolate (nor will it error!),
-  ;; when it cannot parse the expression inside the ${{...}}.
-  (is (= "${{ [ 1 + 1 }}"
-         (expr/interpolate-text {} "${{ [ 1 + 1 }}"))))

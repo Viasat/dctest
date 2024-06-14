@@ -39,11 +39,11 @@ Options:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generic command execution
 
-(defn outer-spawn [command {:keys [env stdout stderr] :as opts}]
+(defn outer-spawn [command {:keys [env shell stdout stderr] :as opts}]
   (P/create
     (fn [resolve reject]
       (let [[cmd args shell] (if (string? command)
-                               [command nil true]
+                               [command nil shell]
                                [(first command) (rest command) false])
             cp-opts (merge {:stdio "pipe" :shell shell}
                            (dissoc opts :stdout :stderr))
@@ -71,9 +71,9 @@ Options:
   "[Async] Exec a command in a container and wait for it to complete
   (using wait-exec). Resolves to exec data with additional :Stdout and
   and :Stderr keys."
-  [container command {:keys [env stdout stderr] :as opts}]
+  [container command {:keys [env shell stdout stderr] :as opts}]
   (P/let [cmd (if (string? command)
-                ["sh" "-c" command]
+                [shell "-c" command]
                 command)
           stdout (or stdout (stream/PassThrough.))
           stderr (or stderr (stream/PassThrough.))
@@ -134,7 +134,8 @@ Options:
 (defn execute-step* [context step]
   (P/let [{:keys [docker opts]} context
           {:keys [project verbose-commands]} opts
-          {target :exec index :index command :run} step
+          {:keys [index shell]
+           , target :exec command :run} step
           {:keys [interval retries]} (:repeat step)
           index (or index 1)
 
@@ -162,6 +163,7 @@ Options:
                                            (Eprintln (indent s "       "))))))
           _ (when verbose-commands (println (indent (str command) "       ")))
           cmd-opts {:env (:env context)
+                    :shell shell
                     :stdout stdout-stream
                     :stderr stderr-stream}
           run-exec (if (contains? #{:host ":host"} target)

@@ -39,21 +39,35 @@ Options:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Generic command execution
 
-(defn outer-spawn [command {:keys [env shell stdout stderr] :as opts}]
+(defn outer-spawn [command {:keys [env shell on-stdout on-stderr] :as opts}]
   (P/create
     (fn [resolve reject]
       (let [[cmd args shell] (if (string? command)
                                [command nil shell]
                                [(first command) (rest command) false])
-            cp-opts (merge {:stdio "pipe" :shell shell}
-                           (dissoc opts :stdout :stderr))
+
+            stdout (atom [])
+            stderr (atom [])
+            stdout-stream (doto (stream/PassThrough.)
+                            (.on "data" #(let [s (.toString % "utf8")]
+                                           (swap! stdout conj s)
+                                           (when on-stdout (on-stdout s)))))
+            stderr-stream (doto (stream/PassThrough.)
+                            (.on "data" #(let [s (.toString % "utf8")]
+                                           (swap! stderr conj s)
+                                           (when on-stderr (on-stderr s)))))
+
+            cp-opts {:env env :stdio "pipe" :shell shell}
             child (doto (cp/spawn cmd (clj->js args) (clj->js cp-opts))
                     (.on "close" (fn [code signal]
-                                   (if (= 0 code)
-                                     (resolve {:code code})
-                                     (reject {:code code :signal signal})))))]
-        (when stdout (doto (.-stdout child) (.pipe stdout)))
-        (when stderr (doto (.-stderr child) (.pipe stderr)))))))
+                                   (let [result {:code code
+                                                 :stdout (S/join "" @stdout)
+                                                 :stderr (S/join "" @stderr)}]
+                                     (if (= 0 code)
+                                       (resolve result)
+                                       (reject (assoc result :signal signal)))))))]
+        (doto (.-stdout child) (.pipe stdout-stream))
+        (doto (.-stderr child) (.pipe stderr-stream))))))
 
 (defn outer-exec [command opts]
   (P/catch
@@ -71,20 +85,28 @@ Options:
   "[Async] Exec a command in a container and wait for it to complete
   (using wait-exec). Resolves to exec data with additional :Stdout and
   and :Stderr keys."
-  [container command {:keys [env shell stdout stderr] :as opts}]
+  [container command {:keys [env shell on-stdout on-stderr] :as opts}]
   (P/let [cmd (if (string? command)
                 [shell "-c" command]
                 command)
-          stdout (or stdout (stream/PassThrough.))
-          stderr (or stderr (stream/PassThrough.))
+
+          stdout (atom [])
+          stderr (atom [])
+          stdout-stream (doto (stream/PassThrough.)
+                          (.on "data" #(let [s (.toString % "utf8")]
+                                         (swap! stdout conj s)
+                                         (when on-stdout (on-stdout s)))))
+          stderr-stream (doto (stream/PassThrough.)
+                          (.on "data" #(let [s (.toString % "utf8")]
+                                         (swap! stderr conj s)
+                                         (when on-stderr (on-stderr s)))))
+
           env (mapv (fn [[k v]] (str k "=" v)) env)
-          exec-opts (merge {:AttachStdout true :AttachStderr true :Env env}
-                           (dissoc opts :env :stdout :stderr)
-                           {:Cmd cmd})
+          exec-opts {:AttachStdout true :AttachStderr true :Cmd cmd :Env env}
           exec (.exec container (clj->js exec-opts))
           stream (.start exec)
           _ (-> (.-modem container)
-                (.demuxStream stream stdout stderr))
+                (.demuxStream stream stdout-stream stderr-stream))
           inspect-fn (.bind (promisify (.-inspect exec)) exec)
           data (P/loop []
                  (P/let [data (inspect-fn)]
@@ -92,11 +114,14 @@ Options:
                      (P/do
                        (P/delay WAIT-EXEC-SLEEP)
                        (P/recur))
-                     (P/-> data ->clj))))]
-    (when-not (zero? (:ExitCode data))
+                     (P/-> data ->clj))))
+          result {:code (:ExitCode data)
+                  :stdout (S/join "" @stdout)
+                  :stderr (S/join "" @stderr)}]
+    (when-not (zero? (:code result))
       (throw (ex-info (str "Error running command: " (pr-str command))
-                      data)))
-    data))
+                      result)))
+    result))
 
 (defn dc-service
   "[Async] Return the container for a docker compose service. If not
@@ -149,23 +174,12 @@ Options:
                     (interpolate command)
                     (mapv interpolate command))
 
-          stdout (atom [])
-          stderr (atom [])
-          stdout-stream (doto (stream/PassThrough.)
-                          (.on "data" #(let [s (.toString % "utf8")]
-                                         (swap! stdout conj s)
-                                         (when verbose-commands
-                                           (println (indent s "       "))))))
-          stderr-stream (doto (stream/PassThrough.)
-                          (.on "data" #(let [s (.toString % "utf8")]
-                                         (swap! stderr conj s)
-                                         (when verbose-commands
-                                           (Eprintln (indent s "       "))))))
           _ (when verbose-commands (println (indent (str command) "       ")))
+          log (when verbose-commands #(Eprintln (indent % "       ")))
           cmd-opts {:env (:env context)
                     :shell shell
-                    :stdout stdout-stream
-                    :stderr stderr-stream}
+                    :on-stdout log
+                    :on-stderr log}
           run-exec (if (contains? #{:host ":host"} target)
                      #(outer-exec command cmd-opts)
                      #(compose-exec docker project target index command cmd-opts))
@@ -177,9 +191,7 @@ Options:
                                     retries
                                     {:delay-ms interval
                                      :check-fn :result})]
-    (merge result
-           {:stdout (S/join "" @stdout)
-            :stderr (S/join "" @stderr)})))
+    result))
 
 (defn execute-step [context step]
   (P/let [{step-name :name} step

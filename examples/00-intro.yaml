@@ -23,6 +23,7 @@ tests:
       - exec: node1
         run: echo 'inside node1' && hostname && pwd
       - exec: :host
+        shell: bash
         run: echo 'outside compose' && hostname && pwd
       - exec: node1
         run: ["echo", "array", "of", "arguments"]

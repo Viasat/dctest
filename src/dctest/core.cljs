@@ -60,21 +60,13 @@ Options:
             cp-opts {:env env :stdio "pipe" :shell shell}
             child (doto (cp/spawn cmd (clj->js args) (clj->js cp-opts))
                     (.on "close" (fn [code signal]
-                                   (let [result {:code code
-                                                 :stdout (S/join "" @stdout)
-                                                 :stderr (S/join "" @stderr)}]
-                                     (if (= 0 code)
-                                       (resolve result)
-                                       (reject (assoc result :signal signal)))))))]
+                                   (resolve
+                                     (merge {:code code
+                                             :stdout (S/join "" @stdout)
+                                             :stderr (S/join "" @stderr)}
+                                            (when signal {:signal signal}))))))]
         (doto (.-stdout child) (.pipe stdout-stream))
         (doto (.-stderr child) (.pipe stderr-stream))))))
-
-(defn outer-exec [command opts]
-  (P/catch
-    (outer-spawn command opts)
-    (fn [err]
-      (throw (ex-info (str "Error running command: " (pr-str command))
-                      err)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Docker/Compose
@@ -114,14 +106,10 @@ Options:
                      (P/do
                        (P/delay WAIT-EXEC-SLEEP)
                        (P/recur))
-                     (P/-> data ->clj))))
-          result {:code (:ExitCode data)
-                  :stdout (S/join "" @stdout)
-                  :stderr (S/join "" @stderr)}]
-    (when-not (zero? (:code result))
-      (throw (ex-info (str "Error running command: " (pr-str command))
-                      result)))
-    result))
+                     (P/-> data ->clj))))]
+    {:code (:ExitCode data)
+     :stdout (S/join "" @stdout)
+     :stderr (S/join "" @stderr)}))
 
 (defn dc-service
   "[Async] Return the container for a docker compose service. If not
@@ -181,10 +169,13 @@ Options:
                     :on-stdout log
                     :on-stderr log}
           run-exec (if (contains? #{:host ":host"} target)
-                     #(outer-exec command cmd-opts)
+                     #(outer-spawn command cmd-opts)
                      #(compose-exec docker project target index command cmd-opts))
           result (retry/retry-times #(P/catch
                                        (P/let [res (run-exec)]
+                                         (when-not (zero? (:code res))
+                                           (throw (ex-info (str "Error running command: " (pr-str command))
+                                                           res)))
                                          {:result res})
                                        (fn [err]
                                          {:error err}))

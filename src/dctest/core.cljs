@@ -171,26 +171,27 @@ Options:
           run-exec (if (contains? #{:host ":host"} target)
                      #(outer-spawn command cmd-opts)
                      #(compose-exec docker project target index command cmd-opts))
-          result (retry/retry-times #(P/catch
-                                       (P/let [res (run-exec)]
-                                         (when-not (zero? (:code res))
-                                           (throw (ex-info (str "Error running command: " (pr-str command))
-                                                           res)))
-                                         {:result res})
-                                       (fn [err]
-                                         {:error err}))
-                                    retries
-                                    {:delay-ms interval
-                                     :check-fn :result})]
-    result))
+          asserts (fn [result]
+                    (when-not (zero? (:code result))
+                      {:message (str "Error running command: " (pr-str command))}))
+          exec-result (retry/retry-times #(P/let [res (P/catch (run-exec)
+                                                        (fn [err] {:error {:message (.-message err)}}))]
+                                            (if-let [error (or (:error res) (asserts res))]
+                                              (assoc res :error error)
+                                              res))
+                                         retries
+                                         {:delay-ms interval
+                                          :check-fn #(not (:error %))})
+          outcome (if (:error exec-result) :fail :pass)]
+    (merge exec-result
+           {:outcome outcome})))
 
 (defn execute-step [context step]
   (P/let [{step-name :name} step
 
           result (if (get-in context [:state :failed])
                    {:outcome :skip}
-                   (P/let [result (execute-step* context step)]
-                     (assoc result :outcome (if (:error result) :fail :pass))))
+                   (execute-step* context step))
           results (merge result
                          (when step-name {:name step-name}))
           context (update-in context [:state :failed] #(or % (failure? results)))]
@@ -252,7 +253,7 @@ Options:
      :name (:name suite)
      :tests results}))
 
-(def VERBOSE-SUMMARY-KEYS [:result :stdout :stderr])
+(def VERBOSE-SUMMARY-KEYS [:code :signal :stdout :stderr])
 
 (defn summarize [results verbose-results]
   ;; Note: Suite can fail in setup/teardown, when all tests pass
@@ -276,7 +277,7 @@ Options:
                    (filter failure?)
                    (map-indexed vector))]
       (log opts "  " (inc index) ")" test-name)
-      (log opts "     " (.-message error))
+      (log opts "     " (:message error))
       (log opts "")))
   (log opts
        (:pass summary) "passing,"

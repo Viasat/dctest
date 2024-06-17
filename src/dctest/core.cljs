@@ -144,59 +144,66 @@ Options:
 (defn short-outcome [{:keys [outcome]}]
   (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
 
-(defn execute-step* [context step]
+(defn execute-step [context step]
   (P/let [{:keys [docker opts]} context
           {:keys [project verbose-commands]} opts
-          {:keys [index shell]
-           , target :exec command :run} step
-          {:keys [interval retries]} (:repeat step)
-          index (or index 1)
+          skip? (get-in context [:state :failed])]
 
-          ;; Interpolate step env before other keys
-          step-env (update-vals (:env step) #(expr/interpolate-text context %))
-          context (update context :env merge step-env)
+    (if skip?
+      (let [results (merge {:outcome :skip}
+                           (select-keys step [:name]))]
+        {:context context
+         :results results})
 
-          interpolate #(expr/interpolate-text context %)
-          target (interpolate target)
-          command (if (string? command)
-                    (interpolate command)
-                    (mapv interpolate command))
+      (P/let [;; Interpolate step env before all other keys
+              step (update step :env update-vals #(expr/interpolate-text context %))
+              ;; Do not leak step env back into original context
+              step-context (update context :env merge (:env step))
 
-          _ (when verbose-commands (println (indent (str command) "       ")))
-          log (when verbose-commands #(Eprintln (indent % "       ")))
-          cmd-opts {:env (:env context)
-                    :shell shell
-                    :on-stdout log
-                    :on-stderr log}
-          run-exec (if (contains? #{:host ":host"} target)
-                     #(outer-spawn command cmd-opts)
-                     #(compose-exec docker project target index command cmd-opts))
-          asserts (fn [result]
-                    (when-not (zero? (:code result))
-                      {:message (str "Error running command: " (pr-str command))}))
-          exec-result (retry/retry-times #(P/let [res (P/catch (run-exec)
+              ;; Interpolate rest of step using step-local context
+              interpolate #(expr/interpolate-text step-context %)
+              step (-> step
+                       (update :index #(or % 1))
+                       (update :run (fn [cmd]
+                                      (if (string? command)
+                                        (interpolate command)
+                                        (mapv interpolate command))))
+                       (update :target interpolate))
+
+              {:keys [index shell]} step
+              {target :exec command :run} step
+              {:keys [interval retries]} (:repeat step)
+
+              _ (when verbose-commands (println (indent (str command) "       ")))
+              log (when verbose-commands #(Eprintln (indent % "       ")))
+              cmd-opts {:env (:env step-context)
+                        :shell shell
+                        :on-stdout log
+                        :on-stderr log}
+              run-exec (if (contains? #{:host ":host"} target)
+                         #(outer-spawn command cmd-opts)
+                         #(compose-exec docker project target index command cmd-opts))
+
+              run-asserts (fn [exec-result]
+                            (when-not (zero? (:code exec-result))
+                              {:message (str "Error running command: " (pr-str command))}))
+
+              results (retry/retry-times #(P/let [res (P/catch (run-exec)
                                                         (fn [err] {:error {:message (.-message err)}}))]
-                                            (if-let [error (or (:error res) (asserts res))]
+                                            (if-let [error (or (:error res) (run-asserts res))]
                                               (assoc res :error error)
                                               res))
                                          retries
                                          {:delay-ms interval
                                           :check-fn #(not (:error %))})
-          outcome (if (:error exec-result) :fail :pass)]
-    (merge exec-result
-           {:outcome outcome})))
 
-(defn execute-step [context step]
-  (P/let [{step-name :name} step
-
-          result (if (get-in context [:state :failed])
-                   {:outcome :skip}
-                   (execute-step* context step))
-          results (merge result
-                         (when step-name {:name step-name}))
-          context (update-in context [:state :failed] #(or % (failure? results)))]
-    {:context context
-     :results results}))
+              outcome (if (:error results) :fail :pass)
+              results (merge results
+                             {:outcome outcome}
+                             (select-keys step [:name]))
+              context (update-in context [:state :failed] #(or % (failure? results)))]
+        {:context context
+         :results results}))))
 
 (defn execute-steps [context steps]
   (P/let [results (P/loop [steps steps

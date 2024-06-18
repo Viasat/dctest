@@ -157,7 +157,7 @@ Options:
 (defn execute-step [context step]
   (P/let [{:keys [opts]} context
           {:keys [verbose-commands]} opts
-          skip? (get-in context [:state :failed])]
+          skip? (not (expr/read-eval context (:if step)))]
 
     (if skip?
       (let [results (merge {:outcome :skip}

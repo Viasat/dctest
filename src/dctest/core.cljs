@@ -68,6 +68,11 @@ Options:
         (doto (.-stdout child) (.pipe stdout-stream))
         (doto (.-stderr child) (.pipe stderr-stream))))))
 
+(defn outer-exec [context step opts]
+  (P/let [{:keys [env]} context
+          {command :run shell :shell} step]
+    (outer-spawn command (merge opts {:env env :shell shell}))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Docker/Compose
 
@@ -127,13 +132,18 @@ Options:
     container))
 
 (defn compose-exec
-  [docker project service index command opts]
-  (P/let [container (dc-service docker project service index)]
-    (when-not container
+  [context step opts]
+  (P/let [{:keys [docker env]} context
+          {:keys [project verbose-commands]} (:opts context)
+          {command :run index :index service :exec shell :shell} step
+
+          opts (merge opts {:env env :shell shell})
+          container (dc-service docker project service index)]
+    (if container
+      (docker-exec container command opts)
       (throw (ex-info (str "No container found for service "
                            "'" service "' (index=" index ")")
-                      {})))
-    (docker-exec container command opts)))
+                      {})))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Test Runner
@@ -145,8 +155,8 @@ Options:
   (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
 
 (defn execute-step [context step]
-  (P/let [{:keys [docker opts]} context
-          {:keys [project verbose-commands]} opts
+  (P/let [{:keys [opts]} context
+          {:keys [verbose-commands]} opts
           skip? (get-in context [:state :failed])]
 
     (if skip?
@@ -163,31 +173,26 @@ Options:
               ;; Interpolate rest of step using step-local context
               interpolate #(expr/interpolate-text step-context %)
               step (-> step
+                       (update :exec interpolate)
                        (update :index #(or % 1))
-                       (update :run (fn [cmd]
+                       (update :run (fn [command]
                                       (if (string? command)
                                         (interpolate command)
-                                        (mapv interpolate command))))
-                       (update :target interpolate))
+                                        (mapv interpolate command)))))
 
-              {:keys [index shell]} step
-              {target :exec command :run} step
-              {:keys [interval retries]} (:repeat step)
-
-              _ (when verbose-commands (println (indent (str command) "       ")))
+              _ (when verbose-commands (println (indent (str (:run step)) "       ")))
               log (when verbose-commands #(Eprintln (indent % "       ")))
-              cmd-opts {:env (:env step-context)
-                        :shell shell
-                        :on-stdout log
+              cmd-opts {:on-stdout log
                         :on-stderr log}
-              run-exec (if (contains? #{:host ":host"} target)
-                         #(outer-spawn command cmd-opts)
-                         #(compose-exec docker project target index command cmd-opts))
+              run-exec (if (contains? #{:host ":host"} (:exec step))
+                         #(outer-exec step-context step cmd-opts)
+                         #(compose-exec step-context step cmd-opts))
 
               run-asserts (fn [exec-result]
                             (when-not (zero? (:code exec-result))
-                              {:message (str "Error running command: " (pr-str command))}))
+                              {:message (str "Error running command: " (pr-str (:run step)))}))
 
+              {:keys [interval retries]} (:repeat step)
               results (retry/retry-times #(P/let [res (P/catch (run-exec)
                                                         (fn [err] {:error {:message (.-message err)}}))]
                                             (if-let [error (or (:error res) (run-asserts res))]

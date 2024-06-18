@@ -2,7 +2,7 @@
 
 die() { echo >&2 "${*}"; exit 1; }
 
-TOP=$(node -e "console.log(require('path').resolve(require.resolve('nbb') + '/../../../'))" 2>/dev/null)
+TOP=$(NODE_PATH=$(dirname ${0})/node_modules node -e "console.log(require('path').resolve(require.resolve('nbb') + '/../../../'))" 2>/dev/null)
 [ "${TOP}" ] || die "Could not locate 'nbb' module."
 NBB=${TOP}/node_modules/.bin/nbb
 [ -e "${NBB}" ] || die "No '${NBB}' found."

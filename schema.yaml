@@ -35,6 +35,7 @@ properties:
               env:  { "$ref": "#/$defs/env" }
               exec: { type: string, expression: InterpolatedText }
               name: { type: string }
+              if: { type: string, expression: Expression, default: "success()" }
               index: { type: integer }
               run:
                 oneOf:

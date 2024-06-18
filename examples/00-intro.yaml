@@ -11,6 +11,9 @@ tests:
       - exec: node1
         run: /bin/true
       - exec: node1
+        if: failure()
+        run: /bin/false
+      - exec: node1
         env:
           FOO: bar
         run: |

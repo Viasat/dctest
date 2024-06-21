@@ -11,14 +11,17 @@ tests:
       - exec: node1
         run: /bin/true
       - exec: node1
-        if: failure()
-        run: /bin/false
-      - exec: node1
         env:
           FOO: bar
         run: |
           [ "${FOO}" == "bar" ]
         repeat: { retries: 3, interval: '1s' }
+      - exec: node1
+        if: success()
+        run: echo "This will be run!"
+      - exec: node1
+        if: failure()
+        run: echo "This will NOT be run!"
 
   inside-outside:
     name: Inside and outside test
@@ -64,6 +67,9 @@ tests:
         run: /bin/false
       - exec: node1
         run: echo 'This step is skipped'
+      - exec: node1
+        if: failure()
+        run: echo "This step WILL be run!"
 
   fail-signal:
     name: Failing due to INT signal

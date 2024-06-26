@@ -254,8 +254,9 @@ Options:
            (when error {:error (:error error)}))))
 
 (defn run-suite [context suite]
-  (log (:opts context) "  " (:name suite))
-  (P/let [suite-env (update-vals (:env suite) #(expr/interpolate-text context %))
+  (P/let [opts (:opts context)
+          _ (log opts "  " (:name suite))
+          suite-env (update-vals (:env suite) #(expr/interpolate-text context %))
           context (update context :env merge suite-env)
           results (P/loop [tests (vals (:tests suite))
                            context context
@@ -267,11 +268,11 @@ Options:
                       (P/let [[test & tests] tests
                               result (run-test context suite test)
                               results (conj results result)]
-                        (log (:opts context) "    " (short-outcome result) (:name result))
+                        (log opts "    " (short-outcome result) (:name result))
                         (P/recur tests context results))))
           outcome (if (some failure? results) :fail :pass)]
 
-    (log (:opts context)) ; breath between suites
+    (log opts) ; breath between suites
 
     {:outcome outcome
      :name (:name suite)

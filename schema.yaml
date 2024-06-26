@@ -23,6 +23,12 @@ properties:
       properties:
         env:  { "$ref": "#/$defs/env" }
         name: { type: string }
+        depends:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                oneOf: [ { type: string }, { type: object } ]
         steps:
           type: array
           items:

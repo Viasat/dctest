@@ -1,0 +1,75 @@
+name: Example Ordering Suite
+
+tests:
+  # Dep graph:
+  #
+  #                             +- s-C <-+
+  #                             |        |
+  #   s-PRE <--- s-A <--- s-B <-+        AND- s-E
+  #                             |        |
+  #                             +- s-D <-+
+  #
+  # - s-PRE should run before all other tests
+  # - A-E run in alpha order except C/D which can run in either order
+  s-A:
+    depends: ["s-PRE"]
+    steps: [{exec: node1, run: "echo s-A | tee -a /tmp/s-result"}]
+
+  s-B:
+    depends: ["s-PRE", "s-A"]
+    steps: [{exec: node1, run: "echo s-B | tee -a /tmp/s-result"}]
+
+  s-C:
+    depends: ["s-PRE", "s-B"]
+    steps: [{exec: node1, run: "echo s-C | tee -a /tmp/s-result"}]
+
+  s-D:
+    depends: ["s-PRE", "s-B"]
+    steps: [{exec: node1, run: "echo s-D | tee -a /tmp/s-result"}]
+
+  s-E:
+    depends: ["s-PRE", "s-C", "s-D"]
+    steps: [{exec: node1, run: "echo s-E | tee -a /tmp/s-result"}]
+
+  s-PRE:
+    steps: [{exec: node1, run: "echo s-PRE | tee /tmp/s-result"}]
+
+  s-CHECK:
+    depends: ["s-E"]
+    steps:
+      - exec: node1
+        run: "cat /tmp/s-result"
+        expect: '(step.stdout == "s-PRE\ns-A\ns-B\ns-C\ns-D\ns-E\n") ||
+                 (step.stdout == "s-PRE\ns-A\ns-B\ns-D\ns-C\ns-E\n")'
+
+  # Dep graph:
+  #
+  #           +- a-A <-+
+  #           |        |
+  #   a-PRE <-+        OR- a-C
+  #           |        |
+  #           +- a-B <-+
+  a-A:
+    depends: "a-PRE"  # single string ID is equivalent to [ID]
+    steps: [{exec: node1, run: "echo a-A | tee -a /tmp/a-result"}]
+
+  a-B:
+    depends: ["a-PRE"]
+    steps: [{exec: node1, run: "echo a-B | tee -a /tmp/a-result"}]
+
+  a-C:
+    depends: ["a-PRE", {or: ["a-A", "a-B"]}]
+    steps: [{exec: node1, run: "echo a-C | tee -a /tmp/a-result"}]
+
+  a-PRE:
+    steps: [{exec: node1, run: "echo a-PRE | tee /tmp/a-result"}]
+
+  a-CHECK:
+    depends: ["a-C"]
+    steps:
+      - exec: node1
+        run: "cat /tmp/a-result"
+        expect: '(step.stdout == "a-PRE\na-A\na-C\n") ||
+                 (step.stdout == "a-PRE\na-B\na-C\n") ||
+                 (step.stdout == "a-PRE\na-A\na-B\na-C\n") ||
+                 (step.stdout == "a-PRE\na-B\na-A\na-C\n")'

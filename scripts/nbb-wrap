@@ -13,7 +13,7 @@ else
 fi
 [ "${DCTEST}" ] || die "Could not locate 'dctest' module directory."
 [ -d "${DCTEST}/src" ] || die "No directory at ${DCTEST}/src"
-NBB_CP="${DCTEST}/src:${DCTEST}/test:${NBB_CP}:${TOP}/node_modules/@lonocloud/cljs-utils/src"
+NBB_CP="${DCTEST}/src:${DCTEST}/test:${NBB_CP}:${TOP}/node_modules/@lonocloud/cljs-utils/src:${TOP}/node_modules/@lonocloud/resolve-deps/src"
 
 case "$(basename "${0}")" in
   dctest)   MAIN=dctest.core ;;

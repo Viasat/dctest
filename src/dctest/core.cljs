@@ -11,6 +11,7 @@
             [promesa.core :as P]
             [viasat.retry :as retry]
             [viasat.util :refer [fatal parse-opts write-file Eprintln]]
+            [viasat.deps :refer [resolve-dep-order]]
             ["util" :refer [promisify]]
             ["stream" :as stream]
             ["child_process" :as cp]
@@ -253,12 +254,30 @@ Options:
            (when test-name {:name test-name})
            (when error {:error (:error error)}))))
 
+(defn resolve-test-order [test-map]
+  (let [start-list (keys test-map)
+        dep-graph (merge (into {} (for [[id test] test-map]
+                                    (let [depends (:depends test)]
+                                      [id (if (map? depends)
+                                            (update-keys depends keyword)
+                                            (if (string? depends)
+                                              [depends]
+                                              depends))])))
+                         {:START start-list})
+        ordered-test-ids (->> (resolve-dep-order dep-graph :START)
+                              (filter #(not= :START %)))]
+    (for [id ordered-test-ids]
+      (-> test-map
+          (get id)
+          (assoc :id id)))))
+
 (defn run-suite [context suite]
   (P/let [opts (:opts context)
           _ (log opts "  " (:name suite))
           suite-env (update-vals (:env suite) #(expr/interpolate-text context %))
           context (update context :env merge suite-env)
-          results (P/loop [tests (vals (:tests suite))
+          tests (resolve-test-order (:tests suite))
+          results (P/loop [tests tests
                            context context
                            results []]
                     (if (or (empty? tests)

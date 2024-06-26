@@ -26,6 +26,8 @@ Usage:
   dctest [options] <project> <test-suite>...
 
 Options:
+  --test-filter TESTS           Comma separated list of test names to run
+                                [default: *]
   --continue-on-error           Continue running tests, even if one fails
   --quiet                       Only print final totals
   --verbose-commands            Show live stdout/stderr from test commands
@@ -254,16 +256,22 @@ Options:
            (when test-name {:name test-name})
            (when error {:error (:error error)}))))
 
-(defn resolve-test-order [test-map]
-  (let [start-list (keys test-map)
-        dep-graph (merge (into {} (for [[id test] test-map]
-                                    (let [depends (:depends test)]
-                                      [id (if (map? depends)
-                                            (update-keys depends keyword)
-                                            (if (string? depends)
-                                              [depends]
-                                              depends))])))
-                         {:START start-list})
+(defn filter-tests [graph filter-str]
+  (let [raw-list (if (= "*" filter-str)
+                     (keys graph)
+                     (S/split filter-str #","))]
+    (keys (select-keys graph raw-list))))
+
+(defn resolve-test-order [test-map filter-str]
+  (let [dep-graph (into {} (for [[id test] test-map]
+                             (let [depends (:depends test)]
+                               [id (if (map? depends)
+                                     (update-keys depends keyword)
+                                     (if (string? depends)
+                                       [depends]
+                                       depends))])))
+        start-list (filter-tests dep-graph filter-str)
+        dep-graph (assoc dep-graph :START start-list)
         ordered-test-ids (->> (resolve-dep-order dep-graph :START)
                               (filter #(not= :START %)))]
     (for [id ordered-test-ids]
@@ -276,7 +284,7 @@ Options:
           _ (log opts "  " (:name suite))
           suite-env (update-vals (:env suite) #(expr/interpolate-text context %))
           context (update context :env merge suite-env)
-          tests (resolve-test-order (:tests suite))
+          tests (resolve-test-order (:tests suite) (:test-filter opts))
           results (P/loop [tests tests
                            context context
                            results []]
@@ -392,7 +400,7 @@ Options:
 
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
-          {:keys [continue-on-error project test-suite
+          {:keys [continue-on-error project test-suite test-filter
                   quiet verbose-commands verbose-results]} opts
           _ (when (empty? test-suite)
               (Eprintln (str "WARNING: no test-suite was specified")))
@@ -407,6 +415,7 @@ Options:
                                     :process (js-process)
                                     :opts {:project project
                                            :quiet quiet
+                                           :test-filter test-filter
                                            :verbose-commands verbose-commands}
                                     :strategy {:continue-on-error continue-on-error}}
                            results []]

@@ -334,25 +334,28 @@ Options:
         (+ seconds)
         (* 1000))))
 
-(defn normalize [suite]
+(defn normalize [suite path]
   (let [->step (fn [step]
                  (-> step
                      (update :env update-keys name)
                      (update-in [:repeat :interval] parse-interval)))
-        ->test (fn [test]
-                 (-> test
+        ->test (fn [test id]
+                 (-> (merge {:name id} test)
                      (update :env update-keys name)
-                     (update :steps #(mapv ->step %))))]
-    (-> suite
-        (update :env update-keys name)
-        (update :tests update-keys name)
-        (update :tests update-vals ->test))))
+                     (update :steps #(mapv ->step %))))
+        ->suite (fn [suite path]
+                  (-> (merge {:name path} suite)
+                      (update :env update-keys name)
+                      (update :tests update-keys name)
+                      (update :tests #(into {} (for [[id t] %]
+                                                 [id (->test t id)])))))]
+    (->suite suite path)))
 
 (defn load-test-suite! [opts path]
   (P/let [schema (util/load-yaml (:schema-file opts))
           suite (P/-> (util/load-yaml path)
                       (util/check-schema schema true)
-                      normalize)]
+                      (normalize path))]
     suite))
 
 

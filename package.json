@@ -13,7 +13,7 @@
     "dockerode": "^3.3.1",
     "ebnf": "1.9.1",
     "js-yaml": "^4.1.0",
-    "nbb": "^1.2.179",
+    "nbb": "^1.2.190",
     "neodoc": "^2.0.2",
     "shadow-cljs": "^2.28.6",
     "source-map-support": "^0.5.21"

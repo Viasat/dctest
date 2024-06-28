@@ -261,3 +261,24 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
 
 (defn interpolate-text [context text]
   (print-objs (eval-ast context (read-ast text "InterpolatedText"))))
+
+(defn explain-refs [context text]
+  (let [ast (read-ast text "Expression")
+        refs (loop [loc (ast-zipper ast)
+                    refs #{}]
+               (if (zip/end? loc)
+                 refs
+                 (let [node (zip/node loc)]
+                   (if (= "MemberExpression" (:type node))
+                     ;; Add member/context name to refs (and do not recurse _into_ member expression)
+                     (let [loc (zip/replace loc (assoc node :children []))
+                           refs (conj refs (:text node))]
+                       (recur (zip/next loc)
+                              refs))
+
+                     ;; Recurse
+                     (recur (zip/next loc)
+                            refs)))))]
+    (reduce #(assoc %1 %2 (read-eval context %2))
+            {}
+            refs)))

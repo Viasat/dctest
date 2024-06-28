@@ -33,6 +33,23 @@
        "this is ${{ 1 + }}."
        "this is ${{true}} and ${{true}."))
 
+(deftest test-explain-interpolation
+  (let [context {:env {"FOO" "123"}
+                 :step {:stdout "123"
+                        :stderr "456"}}]
+    (are [expr result] (= result (expr/explain-refs context expr))
+         "1 + 1"
+         {}
+
+         "step.stdout == '987'"
+         {"step.stdout" "123"}
+
+         "step.stdout == env.FOO"
+         {"step.stdout" "123" "env.FOO" "123"}
+
+         "env"
+         {"env" {"FOO" "123"}})))
+
 (deftest test-literals-interpolation
   ;; roundtrip
   (are [expr] (= expr (expr/interpolate-text {} (str "${{" expr "}}")))

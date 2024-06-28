@@ -5,7 +5,7 @@
   (:require
     [cljs-bean.core :refer [->clj ->js]]
     [clojure.string :as S]
-    [clojure.pprint :refer [pprint]]
+    [clojure.pprint :refer [pprint print-table]]
     [dctest.expressions :as expr]
     [promesa.core :as P]
     [viasat.util :refer [Eprintln fatal read-file]]
@@ -39,10 +39,16 @@
 (defn indent [s pre]
   (-> s
       (S/replace #"[\n]*$" "")
-      (S/replace #"(^|[\n])" (str "$1" pre))))
+      (S/replace #"([\n]|^)" (str "$1" pre))))
 
 (defn indent-pprint-str [o pre]
     (indent (trim (with-out-str (pprint o))) pre))
+
+(defn indent-print-table-str
+  ([rows pre]
+   (indent (trim (with-out-str (print-table rows))) pre))
+  ([ks rows pre]
+   (indent (trim (with-out-str (print-table ks rows))) pre)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; File functions

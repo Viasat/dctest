@@ -7,7 +7,7 @@
             [clojure.string :as S]
             [clojure.walk :refer [postwalk]]
             [dctest.expressions :as expr]
-            [dctest.util :as util :refer [obj->str js->map log indent]]
+            [dctest.util :as util :refer [obj->str js->map log indent indent-print-table-str]]
             [promesa.core :as P]
             [viasat.retry :as retry]
             [viasat.util :refer [fatal parse-opts write-file Eprintln]]
@@ -208,7 +208,8 @@ Options:
               step-context (assoc step-context :step results)
               run-expect (fn [expr]
                            (when-not (expr/read-eval step-context expr)
-                             {:error {:message (str "Expectation failure: " expr)}}))
+                             {:error {:message (str "Expectation failure: " expr)
+                                      :debug (expr/explain-refs step-context expr)}}))
               expect-results (when-not (:error results)
                                (first (keep run-expect (:expect step))))
               results (merge expect-results results)
@@ -301,6 +302,15 @@ Options:
                    (map-indexed vector))]
       (log opts "  " (inc index) ")" test-name)
       (log opts "     " (:message error))
+
+      (let [columns ["reference" "value"]
+            details (:debug error)]
+        (when details
+          (log opts
+               (indent-print-table-str columns
+                                       (map #(zipmap columns %) details)
+                                       "      "))))
+
       (log opts "")))
   (log opts
        (:pass summary) "passing,"

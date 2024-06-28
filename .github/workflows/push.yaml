@@ -41,7 +41,7 @@ jobs:
         run: |
           docker-compose -f examples/docker-compose.yaml up -d
 
-      - name: Run Examples
+      - name: Run Intro Examples
         run: |
           # Some examples demonstate failure.
           # Swallow exit code and check the result counts.
@@ -50,16 +50,16 @@ jobs:
             -v $(pwd)/examples:/app/examples \
             dctest --results-file /app/examples/results.json examples /app/examples/00-intro.yaml \
             || true
-          jq --exit-status '[.pass == 4, .fail == 1] | all' examples/results.json
+          jq --exit-status '[.pass == 4, .fail == 0] | all' examples/results.json
 
-      - name: Run Examples with --continue-on-error
+      - name: Run Intro + Fail Examples with --continue-on-error
         run: |
           # Some examples demonstate failure.
           # Swallow exit code and check the result counts.
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v $(pwd)/examples:/app/examples \
-            dctest --continue-on-error --results-file /app/examples/results.json examples /app/examples/00-intro.yaml \
+            dctest --continue-on-error --results-file /app/examples/results.json examples /app/examples/00-intro.yaml /app/examples/01-fails.yaml \
             || true
           jq --exit-status '[.pass == 5, .fail == 3] | all' examples/results.json
 

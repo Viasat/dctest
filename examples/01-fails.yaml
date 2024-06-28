@@ -1,0 +1,36 @@
+name: Example Suite - Failures
+
+tests:
+
+  fail-exit-code:
+    name: Failing due to non-zero exit code
+    steps:
+      - exec: node1
+        run: echo "some leading stdout"
+      - exec: node1
+        run: /bin/false
+      - exec: node1
+        run: echo 'This step is skipped'
+      - exec: node1
+        if: failure()
+        run: echo "This step WILL be run!"
+
+  fail-signal:
+    name: Failing due to INT signal
+    steps:
+      - exec: :host
+        run: kill -s INT $$
+      - exec: node1
+        run: echo 'This step is skipped'
+
+  maybe-skipped:
+    name: Skipped test (unless running with --continue-on-error)
+    steps:
+      - exec: node1
+        run: /bin/true
+
+  fail-nonexistent-container:
+    name: Test nonexistent container
+    steps:
+      - exec: node2
+        run: /bin/true

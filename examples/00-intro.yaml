@@ -58,6 +58,18 @@ tests:
         run: |
           [ "" == "${FOO}" ]
 
+  expect-assertions:
+    name: Expect test
+    steps:
+      - exec: node1
+        run: echo -n "2"
+        expect: step.stdout == "2"
+      - exec: node1
+        run: echo -n "3"
+        expect:
+          - step.stdout != "2"
+          - step.stdout == "3"
+
   fail-exit-code:
     name: Failing due to non-zero exit code
     steps:

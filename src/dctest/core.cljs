@@ -192,6 +192,7 @@ Options:
               interpolate #(expr/interpolate-text step-context %)
               step (-> step
                        (update :exec interpolate)
+                       (update :expect #(if (string? %) [%] %))
                        (update :index #(or % 1))
                        (update :run (fn [command]
                                       (if (string? command)
@@ -203,6 +204,14 @@ Options:
                                          retries
                                          {:delay-ms interval
                                           :check-fn #(not (:error %))})
+
+              step-context (assoc step-context :step results)
+              run-expect (fn [expr]
+                           (when-not (expr/read-eval step-context expr)
+                             {:error {:message (str "Expectation failure: " expr)}}))
+              expect-results (when-not (:error results)
+                               (first (keep run-expect (:expect step))))
+              results (merge expect-results results)
 
               outcome (if (:error results) :fail :pass)
               results (merge results

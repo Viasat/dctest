@@ -174,10 +174,12 @@
 
   ;; Supported contexts
   (let [contexts {:env {"FOO" 1}
-                  :process {"pid" 123}}]
+                  :process {"pid" 123}
+                  :step {:code 0 :stdout "hi" :stderr ""}}]
     (are [expected text] (= expected (expr/read-eval contexts text))
-         1   "env.FOO"
-         123 "process.pid"))
+         1    "env.FOO"
+         123  "process.pid"
+         "hi" "step.stdout"))
 
   ;; Coerce keywords to strings inside context
   (is (= 123

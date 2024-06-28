@@ -45,7 +45,7 @@ END_INTERP   ::= '}}'
 Expression ::= BinaryExpression | UnaryExpression
 
 BinaryExpression ::= UnaryExpression BinOp Expression
-BinOp ::= '&&' | '||' | '+' | '-' | '*' | '/'
+BinOp ::= '==' | '!=' | '&&' | '||' | '+' | '-' | '*' | '/'
 
 UnaryExpression  ::= WHITESPACE* (Value | FunctionCall | MemberExpression | ParensExpression) WHITESPACE*
 ParensExpression ::= BEGIN_PAREN_EXPR Expression END_PAREN_EXPR
@@ -210,6 +210,8 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
       "UnaryExpression"  (eval (first children))
       "BinaryExpression" (let [[a op b] children]
                            (case (:text op)
+                             "==" (= (eval a) (eval b))
+                             "!=" (not= (eval a) (eval b))
                              "&&" (and (eval a) (eval b))
                              "||" (or (eval a) (eval b))
                              "+"  (+ (eval a) (eval b))

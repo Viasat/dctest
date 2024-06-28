@@ -78,6 +78,12 @@
 
 (deftest test-operator-expressions
   (are [expected expr] (= expected (expr/read-eval {} expr))
+       ;; equality
+       true  "true == true"
+       false "true != true"
+       false "3 == 4"
+       true  "3 != 4"
+
        ;; and
        true  "true  && true"
        false "false && true"

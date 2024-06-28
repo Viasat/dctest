@@ -13,7 +13,7 @@
 (declare read-ast)
 
 (def supported-contexts
-  #{"env" "process"})
+  #{"env" "process" "step"})
 
 (def stdlib
   {

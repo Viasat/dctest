@@ -47,7 +47,7 @@ Expression ::= BinaryExpression | UnaryExpression
 BinaryExpression ::= UnaryExpression BinOp Expression
 BinOp ::= '&&' | '||' | '+' | '-' | '*' | '/'
 
-UnaryExpression  ::= WHITESPACE* (Value | FunctionCall | MemberExpression | ContextName | ParensExpression) WHITESPACE*
+UnaryExpression  ::= WHITESPACE* (Value | FunctionCall | MemberExpression | ParensExpression) WHITESPACE*
 ParensExpression ::= BEGIN_PAREN_EXPR Expression END_PAREN_EXPR
 BEGIN_PAREN_EXPR ::= WHITESPACE* '(' WHITESPACE*
 END_PAREN_EXPR   ::= WHITESPACE* ')' WHITESPACE*
@@ -80,7 +80,7 @@ BEGIN_FUNC_ARGS ::= '('
 SEP_FUNC_ARGS   ::= WHITESPACE* ',' WHITESPACE*
 END_FUNC_ARGS   ::= ')'
 
-MemberExpression ::= ContextName Property+
+MemberExpression ::= ContextName Property*
 ContextName      ::= Identifier
 Property         ::= SEP_PROP_DOT PropertyName | BEGIN_PROP_BRACK Expression END_PROP_BRACK
 PropertyName     ::= Identifier

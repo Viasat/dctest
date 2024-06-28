@@ -191,6 +191,12 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                 (update :children #(mapv remove-parent %))))]
     (pprint (remove-parent ast))))
 
+(defn unescape-string [s]
+  (-> s (S/replace "\\\\" "\u029e")
+        (S/replace "\\\"" "\"")
+        (S/replace "\\n" "\n")
+        (S/replace "\u029e" "\\")))
+
 (defn eval-ast
   [context ast]
   (let [eval #(eval-ast context %) ; don't forget the context
@@ -241,7 +247,7 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
       "String"             (eval (first children))
       "DoubleQuotedString" (-> text
                                (subs 1 (- (count text) 1))
-                               (S/replace "\\\"" "\""))
+                               unescape-string)
       "SingleQuotedString" (-> text
                                (subs 1 (- (count text) 1))
                                (S/replace "''" "'"))

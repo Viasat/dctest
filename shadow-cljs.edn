@@ -3,7 +3,7 @@
                 "node_modules/@lonocloud/resolve-deps/src"]
 
  :dependencies [[funcool/promesa "8.0.450"]
-                [cljs-bean "1.8.0"]]
+                [cljs-bean "1.9.0"]]
 
  :builds
  {:dctest

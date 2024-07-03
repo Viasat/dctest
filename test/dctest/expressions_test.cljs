@@ -167,6 +167,29 @@
        false {:failed false}
        true {:failed true})
 
+  ;; Conversion functions
+  (are [expected expr] (= expected (expr/read-eval {} expr))
+       "{}"    "toJSON({})"
+       {}      "fromJSON(\"{}\")"
+
+       ;; roundtrip
+       1           "fromJSON(toJSON(1))"
+       {"a" 5}     "fromJSON(toJSON({\"a\": 5}))"
+       "{\"a\":5}" "toJSON(fromJSON(toJSON({\"a\": 5})))"
+       )
+
+   ;; String functions
+  (are [expected expr] (= expected (expr/read-eval {} expr))
+       true  "contains('Hello World', 'World')"
+       false "contains('Hello Worl', 'World')"
+
+       true  "startsWith('Hello World', 'Hello')"
+       false "startsWith('Hello World', 'World')"
+
+       false "endsWith('Hello World', 'Hello')"
+       true  "endsWith('Hello World', 'World')"
+       )
+
   ;; Check function names/args
   (are [text] (thrown-with-msg? js/Error #"Unchecked errors"
                                 (expr/read-eval {:state {:failed false}} text))
@@ -206,6 +229,15 @@
 
        ;; count
        3 "[1, 2, 3].count()")
+
+  ;; Nested properties and methods with function calls
+  (are [expected text] (= expected (expr/read-eval {:env {"foo" 3}} text))
+       "3"  "env.foo.toString()"
+       3    "fromJSON(toJSON(env)).foo"
+       "3"  "env.foo.toString()"
+       "3"  "env['foo'].toString()"
+       3    "fromJSON(env.toString()).foo"
+       "3"  "fromJSON(env.toString()).foo.toString()")
 
   ;; Coerce keywords to strings inside context
   (is (= 123

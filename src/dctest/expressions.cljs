@@ -2,7 +2,7 @@
 ;; Licensed under EPL 2.0
 
 (ns dctest.expressions
-  (:require [cljs-bean.core :refer [->clj]]
+  (:require [cljs-bean.core :refer [->clj ->js]]
             [clojure.edn :as edn]
             [clojure.pprint :refer [pprint]]
             [clojure.string :as S]
@@ -17,11 +17,21 @@
   #{"env" "process" "step"})
 
 (def stdlib
+  ;; {name {:arity number :fn (fn [context & args] ..)}}
   {
    ;; Test status functions
    "always"  {:arity 0 :fn (constantly true)}
    "success" {:arity 0 :fn #(not (get-in % [:state :failed]))}
    "failure" {:arity 0 :fn #(boolean (get-in % [:state :failed]))}
+
+   ;; Conversion functions
+   "fromJSON" {:arity 1 :fn #(->clj (js/JSON.parse %2) :keywordize-keys false)}
+   "toJSON"   {:arity 1 :fn #(js/JSON.stringify (->js %2))}
+
+   ;; String functions
+   "contains"   {:arity 2 :fn #(S/includes? %2 %3)}
+   "startsWith" {:arity 2 :fn #(S/starts-with? %2 %3)}
+   "endsWith"   {:arity 2 :fn #(S/ends-with? %2 %3)}
 
    ;; Error functions
    "throw" {:arity 1 :fn #(throw (ex-info %2 {}))}

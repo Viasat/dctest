@@ -10,6 +10,7 @@
             [clojure.zip :as zip]
             ["ebnf" :as ebnf]))
 
+(declare print-obj)
 (declare read-ast)
 
 (def supported-contexts
@@ -24,6 +25,13 @@
 
    ;; Error functions
    "throw" {:arity 1 :fn #(throw (ex-info %2 {}))}
+   })
+
+(def supported-methods
+  ;; {name {:arity number :fn (fn [context object & args] ..)}}
+  {
+   "count"    {:arity 0 :fn #(count %2)}
+   "toString" {:arity 0 :fn #(print-obj %2)}
    })
 
 (def BEGIN_INTERP "${{")
@@ -83,14 +91,22 @@ BEGIN_FUNC_ARGS ::= '('
 SEP_FUNC_ARGS   ::= WHITESPACE* ',' WHITESPACE*
 END_FUNC_ARGS   ::= ')'
 
-MemberExpression ::= MemberObjRef Property+
-MemberObjRef     ::= FunctionCall | ContextName | ParensExpression
+MemberExpression ::= MemberObjRef (MethodCall | Property)+
+MemberObjRef     ::= FunctionCall | ContextName | ParensExpression | Value
 ContextName      ::= Identifier
+
 Property         ::= SEP_PROP_DOT PropertyName | BEGIN_PROP_BRACK Expression END_PROP_BRACK
 PropertyName     ::= Identifier
 SEP_PROP_DOT     ::= WHITESPACE* '.' WHITESPACE*
 BEGIN_PROP_BRACK ::= WHITESPACE* '[' WHITESPACE*
 END_PROP_BRACK   ::= WHITESPACE* ']' WHITESPACE*
+
+MethodCall        ::= SEP_METHOD_DOT MethodName BEGIN_METHOD_ARGS (Expression (SEP_METHOD_ARGS Expression)*)? END_METHOD_ARGS
+SEP_METHOD_DOT    ::= WHITESPACE* '.' WHITESPACE*
+MethodName        ::= Identifier
+BEGIN_METHOD_ARGS ::= '('
+SEP_METHOD_ARGS   ::= WHITESPACE* ',' WHITESPACE*
+END_METHOD_ARGS   ::= ')'
 
 Identifier       ::= IDENTIFIER_START IDENTIFIER_PART*
 IDENTIFIER_START ::= [a-zA-Z] | '$' | '_'
@@ -134,6 +150,19 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
 
           (not= (count args) (:arity func))
           [{:message (str "ArityError: incorrect number of arguments to " func-name)}]
+
+          :else nil))
+
+      "MethodCall"
+      (let [[method & args] children
+            method-name (:text method)
+            method (get supported-methods method-name)]
+        (cond
+          (not method)
+          [{:message (str "ReferenceError: " method-name " is not supported")}]
+
+          (not= (count args) (:arity method))
+          [{:message (str "ArityError: incorrect number of arguments to " method-name)}]
 
           :else nil))
 
@@ -233,10 +262,21 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                                func (get-in stdlib [(:text func) :fn])
                                args (mapv eval args)]
                            (apply func context args))
-      "MemberExpression" (let [[context & props] children
-                               context (eval context)
-                               props (mapv eval props)]
-                           (get-in context props))
+      "MemberExpression" (let [[obj & methods-or-props] children]
+                           (reduce (fn [res m-or-p]
+                                     (when (seq (:errors m-or-p))
+                                       (throw (ex-info "Unchecked errors" (:errors m-or-p))))
+                                     (case (:type m-or-p)
+                                       "MethodCall"
+                                       (let [[method & args] (:children m-or-p)
+                                             method (get-in supported-methods [(:text method) :fn])
+                                             args (mapv eval args)]
+                                         (apply method context res args))
+
+                                       "Property"
+                                       (get res (eval m-or-p))))
+                                   (eval obj)
+                                   methods-or-props))
       "MemberObjRef"     (eval (first children))
       "ContextName"      (let [ident-name text
                                context (stringify-keys context)]

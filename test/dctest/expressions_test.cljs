@@ -177,17 +177,18 @@
        "always(1)" [{:message "ArityError: incorrect number of arguments to always"}]
        "foo()"     [{:message "ReferenceError: foo is not supported"}]))
 
-(deftest test-contexts
+(deftest test-member-expressions
   ;; Supported access patterns
   (are [expected text env] (= expected (expr/read-eval {:env env} text))
-       {"foo" 3} "env"                  {"foo" 3}
-       3         "env.foo"              {"foo" 3}
-       3         "env['foo']"           {"foo" 3}
-       3         "env[\"foo\"]"         {"foo" 3}
-       nil       "env.bar"              {"foo" 3}
-       3         "env . foo"            {"foo" 3}
-       9         "env[env.foo].baz"     {"foo" "bar", "bar" {"baz" 9}}
-       9         "env [ env.foo ] .baz" {"foo" "bar", "bar" {"baz" 9}})
+       {"foo" 3} "env"                       {"foo" 3}
+       3         "env.foo"                   {"foo" 3}
+       3         "env['foo']"                {"foo" 3}
+       3         "env[\"foo\"]"              {"foo" 3}
+       nil       "env.bar"                   {"foo" 3}
+       3         "env . foo"                 {"foo" 3}
+       3         "fromJSON(toJSON(env)).foo" {"foo" 3}
+       9         "env[env.foo].baz"          {"foo" "bar", "bar" {"baz" 9}}
+       9         "env [ env.foo ] .baz"      {"foo" "bar", "bar" {"baz" 9}})
 
   ;; Supported contexts
   (let [contexts {:env {"FOO" 1}

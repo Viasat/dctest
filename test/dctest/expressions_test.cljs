@@ -177,7 +177,7 @@
        "always(1)" [{:message "ArityError: incorrect number of arguments to always"}]
        "foo()"     [{:message "ReferenceError: foo is not supported"}]))
 
-(deftest test-contexts
+(deftest test-member-expressions
   ;; Supported access patterns
   (are [expected text env] (= expected (expr/read-eval {:env env} text))
        {"foo" 3} "env"                  {"foo" 3}

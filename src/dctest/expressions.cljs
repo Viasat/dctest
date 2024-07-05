@@ -50,7 +50,7 @@ Expression ::= BinaryExpression | UnaryExpression
 BinaryExpression ::= UnaryExpression BinOp Expression
 BinOp ::= '==' | '!=' | '&&' | '||' | '+' | '-' | '*' | '/'
 
-UnaryExpression  ::= WHITESPACE* (Value | FunctionCall | MemberExpression | ParensExpression) WHITESPACE*
+UnaryExpression  ::= WHITESPACE* (MemberExpression | Value | FunctionCall | ParensExpression | ContextName) WHITESPACE*
 ParensExpression ::= BEGIN_PAREN_EXPR Expression END_PAREN_EXPR
 BEGIN_PAREN_EXPR ::= WHITESPACE* '(' WHITESPACE*
 END_PAREN_EXPR   ::= WHITESPACE* ')' WHITESPACE*
@@ -83,7 +83,8 @@ BEGIN_FUNC_ARGS ::= '('
 SEP_FUNC_ARGS   ::= WHITESPACE* ',' WHITESPACE*
 END_FUNC_ARGS   ::= ')'
 
-MemberExpression ::= ContextName Property*
+MemberExpression ::= MemberObjRef Property+
+MemberObjRef     ::= FunctionCall | ContextName | ParensExpression
 ContextName      ::= Identifier
 Property         ::= SEP_PROP_DOT PropertyName | BEGIN_PROP_BRACK Expression END_PROP_BRACK
 PropertyName     ::= Identifier
@@ -236,6 +237,7 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                                context (eval context)
                                props (mapv eval props)]
                            (get-in context props))
+      "MemberObjRef"     (eval (first children))
       "ContextName"      (let [ident-name text
                                context (stringify-keys context)]
                            (get-in context [ident-name]))
@@ -278,7 +280,7 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                (if (zip/end? loc)
                  refs
                  (let [node (zip/node loc)]
-                   (if (= "MemberExpression" (:type node))
+                   (if (contains? #{"MemberExpression" "ContextName"} (:type node))
                      ;; Add member/context name to refs (and do not recurse _into_ member expression)
                      (let [loc (zip/replace loc (assoc node :children []))
                            refs (conj refs (:text node))]

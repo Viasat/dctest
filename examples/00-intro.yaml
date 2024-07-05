@@ -64,10 +64,12 @@ tests:
         run: echo -n "2"
         expect: step.stdout == "2"
       - exec: node1
-        run: echo -n "3"
+        run: |
+          echo -n '{"a": {"b": 3}, "c": "Hello World", "d": [1, 2, 3]}'
         expect:
-          - step.stdout != "2"
-          - step.stdout == "3"
+          - fromJSON(step.stdout).a.b == 3
+          - contains(fromJSON(step.stdout).c, "World")
+          - fromJSON(step.stdout).d.count() == 3
 
   repeat:
     name: Repeat test

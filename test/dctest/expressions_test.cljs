@@ -198,6 +198,15 @@
          123  "process.pid"
          "hi" "step.stdout"))
 
+  ;; Supported methods
+  (are [expected text] (= expected (expr/read-eval {} text))
+       ;; toString
+       "hi"      "'hi'.toString()"
+       "[1,2,3]" "[1, 2, 3].toString()"
+
+       ;; count
+       3 "[1, 2, 3].count()")
+
   ;; Coerce keywords to strings inside context
   (is (= 123
          (expr/read-eval {:env {:a {:b 123}}} "env.a.b")))
@@ -207,4 +216,14 @@
     (is (thrown-with-msg? js/Error #"Unchecked errors"
                           (expr/interpolate-text {} invalid)))
     (is (= [{:message "ReferenceError: baz is not supported"}]
-           (expr/flatten-errors (expr/read-ast invalid "InterpolatedText"))))))
+           (expr/flatten-errors (expr/read-ast invalid "InterpolatedText")))))
+
+  ;; Check method names/args
+  (are [text] (thrown-with-msg? js/Error #"Unchecked errors"
+                                (expr/read-eval {:env {}} text))
+       "env.toString(1)"
+       "env.foo()")
+
+  (are [text errors] (= errors (expr/flatten-errors (expr/read-ast text "Expression")))
+       "env.toString(1)" [{:message "ArityError: incorrect number of arguments to toString"}]
+       "env.foo()"       [{:message "ReferenceError: foo is not supported"}]))

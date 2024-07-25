@@ -180,9 +180,11 @@ Options:
 (defn get-expect-error [context expect]
   (if-not (string? expect)
     (first (keep #(get-expect-error context %) expect))
-    (when-not (expr/read-eval context expect)
-      {:message (str "Expectation failure: " expect)
-       :debug (expr/explain-refs context expect)})))
+    (let [condition-met? (try (expr/read-eval context expect)
+                              (catch js/Error e false))]
+      (when-not condition-met?
+        {:message (str "Expectation failure: " expect)
+         :debug (expr/explain-refs context expect)}))))
 
 (defn execute-step [context step]
   (P/let [skip? (not (expr/read-eval context (:if step)))]

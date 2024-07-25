@@ -337,6 +337,8 @@ ExpectedInterpolation ::= InterpolatedExpression PrintableChar*
                      ;; Recurse
                      (recur (zip/next loc)
                             refs)))))]
-    (reduce #(assoc %1 %2 (read-eval context %2))
+    (reduce #(assoc %1 %2
+                    (try (read-eval context %2)
+                         (catch js/Error e (str e))))
             {}
             refs)))

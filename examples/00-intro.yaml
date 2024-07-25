@@ -15,7 +15,6 @@ tests:
           FOO: bar
         run: |
           [ "${FOO}" == "bar" ]
-        repeat: { retries: 3, interval: '1s' }
       - exec: node1
         if: success()
         run: echo "This will be run!"
@@ -71,3 +70,22 @@ tests:
           - fromJSON(step.stdout).a.b == 3
           - contains(fromJSON(step.stdout).c, "World")
           - fromJSON(step.stdout).d.count() == 3
+
+  repeat:
+    name: Repeat test
+    steps:
+      - exec: node1
+        run: rm -f repeat-test-file
+      - exec: node1
+        repeat: { retries: 2, interval: '1s' }
+        run: |
+          if [ ! -f repeat-test-file ]; then
+            echo 'Intentionally invalid JSON'
+            touch repeat-test-file
+          else
+            echo '{"msg": "Repeated successfully"}'
+          fi
+        expect:
+          - fromJSON(step.stdout).msg == "Repeated successfully"
+      - exec: node1
+        run: rm -f repeat-test-file

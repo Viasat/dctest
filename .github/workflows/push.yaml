@@ -39,7 +39,7 @@ jobs:
 
       - name: Setup Fixtures
         run: |
-          docker-compose -f examples/docker-compose.yaml up -d
+          docker compose -f examples/docker-compose.yaml up -d
 
       - name: Run Intro Examples
         run: |
@@ -78,4 +78,4 @@ jobs:
       - name: Setup Fixtures
         if: always()
         run: |
-          docker-compose -f examples/docker-compose.yaml down -t 1 --remove-orphans
+          docker compose -f examples/docker-compose.yaml down -t 1 --remove-orphans

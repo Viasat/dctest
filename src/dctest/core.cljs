@@ -177,6 +177,11 @@ Options:
            (when error {:error error})
            (when signal {:signal signal}))))
 
+(defn get-expect-error [context expect]
+  (when-not (expr/read-eval context expect)
+    {:message (str "Expectation failure: " expect)
+     :debug (expr/explain-refs context expect)}))
+
 (defn execute-step [context step]
   (P/let [skip? (not (expr/read-eval context (:if step)))]
 
@@ -202,20 +207,18 @@ Options:
                                         (interpolate command)
                                         (mapv interpolate command)))))
 
+              run-attempt (fn []
+                            (P/let [results (run-exec step-context step)
+                                    step-context (assoc step-context :step results)
+                                    error (or (:error results)
+                                              (first (keep #(get-expect-error step-context %) (:expect step))))]
+                              (merge results
+                                     (when error {:error error}))))
               {:keys [interval retries]} (:repeat step)
-              results (retry/retry-times #(run-exec step-context step)
+              results (retry/retry-times run-attempt
                                          retries
                                          {:delay-ms interval
                                           :check-fn #(not (:error %))})
-
-              step-context (assoc step-context :step results)
-              run-expect (fn [expr]
-                           (when-not (expr/read-eval step-context expr)
-                             {:error {:message (str "Expectation failure: " expr)
-                                      :debug (expr/explain-refs step-context expr)}}))
-              expect-results (when-not (:error results)
-                               (first (keep run-expect (:expect step))))
-              results (merge expect-results results)
 
               outcome (if (:error results) :fail :pass)
               results (merge results

@@ -15,7 +15,6 @@ tests:
           FOO: bar
         run: |
           [ "${FOO}" == "bar" ]
-        repeat: { retries: 3, interval: '1s' }
       - exec: node1
         if: success()
         run: echo "This will be run!"
@@ -69,3 +68,21 @@ tests:
         expect:
           - step.stdout != "2"
           - step.stdout == "3"
+
+  repeat:
+    name: Repeat test
+    steps:
+      - exec: node1
+        run: rm -f repeat-test-file
+      - exec: node1
+        repeat: { retries: 2, interval: '1s' }
+        run: |
+          if [ ! -f repeat-test-file ]; then
+            touch repeat-test-file
+          else
+            echo -n 'Repeated successfully'
+          fi
+        expect:
+          - step.stdout == "Repeated successfully"
+      - exec: node1
+        run: rm -f repeat-test-file

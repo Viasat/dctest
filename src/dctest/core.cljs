@@ -186,18 +186,13 @@ Options:
   (P/let [skip? (not (expr/read-eval context (:if step)))]
 
     (if skip?
-      (let [results (merge {:outcome :skip}
-                           (select-keys step [:name]))]
-        {:context context
-         :results results})
+      (merge {:outcome :skip}
+             (select-keys step [:name]))
 
-      (P/let [;; Interpolate step env before all other keys
-              step (update step :env update-vals #(expr/interpolate-text context %))
-              ;; Do not leak step env back into original context
-              step-context (update context :env merge (:env step))
+      (P/let [step (update step :env update-vals #(expr/interpolate-text context %))
+              context (update context :env merge (:env step))
 
-              ;; Interpolate rest of step using step-local context
-              interpolate #(expr/interpolate-text step-context %)
+              interpolate #(expr/interpolate-text context %)
               step (-> step
                        (update :exec interpolate)
                        (update :expect #(if (string? %) [%] %))
@@ -208,10 +203,10 @@ Options:
                                         (mapv interpolate command)))))
 
               run-attempt (fn []
-                            (P/let [results (run-exec step-context step)
-                                    step-context (assoc step-context :step results)
+                            (P/let [results (run-exec context step)
+                                    context (assoc context :step results)
                                     error (or (:error results)
-                                              (first (keep #(get-expect-error step-context %) (:expect step))))]
+                                              (first (keep #(get-expect-error context %) (:expect step))))]
                               (merge results
                                      (when error {:error error}))))
               {:keys [interval retries]} (:repeat step)
@@ -220,43 +215,35 @@ Options:
                                          {:delay-ms interval
                                           :check-fn #(not (:error %))})
 
-              outcome (if (:error results) :fail :pass)
-              results (merge results
-                             {:outcome outcome}
-                             (select-keys step [:name]))
-              context (update-in context [:state :failed] #(or % (failure? results)))]
-        {:context context
-         :results results}))))
+              outcome (if (:error results) :fail :pass)]
+        (merge results
+               {:outcome outcome}
+               (select-keys step [:name]))))))
 
 (defn execute-steps [context steps]
-  (P/let [results (P/loop [steps steps
-                           context context
-                           results []]
-                    (if (empty? steps)
-                      results
-                      (P/let [[step & steps] steps
+  (P/loop [steps steps
+           context context
+           results []]
+    (if (empty? steps)
+      results
+      (P/let [[step & steps] steps
 
-                              {context :context
-                               step-results :results} (execute-step context step)
+              step-results (execute-step context step)
+              context (update-in context [:state :failed] #(or % (failure? step-results)))
 
-                              results (conj results step-results)]
-                        (P/recur steps context results))))]
-    {:context context
-     :results results}))
+              results (conj results step-results)]
+        (P/recur steps context results)))))
 
 (defn run-test [context suite test]
-  (P/let [test-name (:name test)
-          test-env (update-vals (:env test) #(expr/interpolate-text context %))
-          context (-> context
-                      (assoc-in [:state :failed] false)
-                      (update :env merge test-env))
+  (P/let [test (update test :env update-vals #(expr/interpolate-text context %))
+          context (update context :env merge (:env test))
+
           steps (execute-steps context (:steps test))
-          results (:results steps)
-          outcome (if (some failure? results) :fail :pass)
-          error (first (filter failure? results))]
+          outcome (if (some failure? steps) :fail :pass)
+          error (first (filter failure? steps))]
     (merge {:outcome outcome
-            :steps results}
-           (when test-name {:name test-name})
+            :steps steps}
+           (select-keys test [:name])
            (when error {:error (:error error)}))))
 
 (defn filter-tests [graph filter-str]

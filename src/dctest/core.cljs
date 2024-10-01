@@ -195,8 +195,6 @@ Options:
               interpolate #(expr/interpolate-text context %)
               step (-> step
                        (update :exec interpolate)
-                       (update :expect #(if (string? %) [%] %))
-                       (update :index #(or % 1))
                        (update :run (fn [command]
                                       (if (string? command)
                                         (interpolate command)
@@ -353,14 +351,17 @@ Options:
         (* 1000))))
 
 (defn normalize [suite path]
-  (let [->step (fn [step]
+  (let [->step (fn [index step]
                  (-> step
                      (update :env update-keys name)
+                     (update :expect #(if (string? %) [%] %))
+                     (update :index #(or % 1))
+                     (update :name #(or % (str "steps[" index "]")))
                      (update-in [:repeat :interval] parse-interval)))
         ->test (fn [test id]
                  (-> (merge {:name id} test)
                      (update :env update-keys name)
-                     (update :steps #(mapv ->step %))))
+                     (update :steps #(vec (map-indexed ->step %)))))
         ->suite (fn [suite path]
                   (-> (merge {:name path} suite)
                       (update :env update-keys name)

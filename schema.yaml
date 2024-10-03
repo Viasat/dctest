@@ -11,7 +11,7 @@ additionalProperties: false
 required: []
 properties:
   env:  { "$ref": "#/$defs/env" }
-  name: { type: string }
+  name: { type: string, expression: InterpolatedText }
   tests:
     type: object
     additionalProperties:
@@ -22,7 +22,7 @@ properties:
       required: []
       properties:
         env:  { "$ref": "#/$defs/env" }
-        name: { type: string }
+        name: { type: string, expression: InterpolatedText }
         depends:
           oneOf:
             - type: string
@@ -44,7 +44,7 @@ properties:
                 oneOf:
                   - { type: string, expression: Expression }
                   - { type: array, items: { type: string, expression: Expression } }
-              name: { type: string }
+              name: { type: string, expression: InterpolatedText }
               if: { type: string, expression: Expression, default: "success()" }
               index: { type: integer }
               run:

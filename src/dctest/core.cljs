@@ -134,6 +134,14 @@ Options:
 (defn short-outcome [{:keys [outcome]}]
   (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
 
+(defn interpolate-any [context v]
+  (let [f #(expr/interpolate-text context %)]
+    (cond
+      (nil? v)    nil
+      (string? v) (f v)
+      (map? v)    (update-vals v f)
+      :else       (mapv f v))))
+
 (defn run-exec
   "Executes a step 'run' command on either the outer/host platform
   or the docker compose service. Step must already be interpolated.
@@ -189,16 +197,13 @@ Options:
       (merge {:outcome :skip}
              (select-keys step [:name]))
 
-      (P/let [step (update step :env update-vals #(expr/interpolate-text context %))
+      (P/let [step (update step :env #(interpolate-any context %))
               context (update context :env merge (:env step))
 
-              interpolate #(expr/interpolate-text context %)
               step (-> step
-                       (update :exec interpolate)
-                       (update :run (fn [command]
-                                      (if (string? command)
-                                        (interpolate command)
-                                        (mapv interpolate command)))))
+                       (update :name #(interpolate-any context %))
+                       (update :exec #(interpolate-any context %))
+                       (update :run #(interpolate-any context %)))
 
               run-attempt (fn []
                             (P/let [results (run-exec context step)
@@ -233,16 +238,17 @@ Options:
         (P/recur steps context results)))))
 
 (defn run-test [context suite test]
-  (P/let [test (update test :env update-vals #(expr/interpolate-text context %))
+  (P/let [test (update test :env #(interpolate-any context %))
           context (update context :env merge (:env test))
 
+          test (update test :name #(interpolate-any context %))
           steps (execute-steps context (:steps test))
-          outcome (if (some failure? steps) :fail :pass)
-          error (first (filter failure? steps))]
-    (merge {:outcome outcome
-            :steps steps}
-           (select-keys test [:name])
-           (when error {:error (:error error)}))))
+          test (assoc test :steps steps)
+
+          test (if-let [error (:error (first (filter failure? steps)))]
+                 (assoc test :outcome :fail :error error)
+                 (assoc test :outcome :pass))]
+    (select-keys test [:id :name :outcome :steps :error])))
 
 (defn filter-tests [graph filter-str]
   (let [raw-list (if (= "*" filter-str)
@@ -269,11 +275,17 @@ Options:
 
 (defn run-suite [context suite]
   (P/let [opts (:opts context)
+
+          suite (update suite :env #(interpolate-any context %))
+          context (update context :env merge (:env suite))
+
+          suite (-> suite
+                    (update :name #(interpolate-any context %))
+                    (update :tests #(resolve-test-order % (:test-filter opts))))
+
           _ (log opts "  " (:name suite))
-          suite-env (update-vals (:env suite) #(expr/interpolate-text context %))
-          context (update context :env merge suite-env)
-          tests (resolve-test-order (:tests suite) (:test-filter opts))
-          results (P/loop [tests tests
+
+          results (P/loop [tests (:tests suite)
                            context context
                            results []]
                     (if (or (empty? tests)
@@ -285,13 +297,12 @@ Options:
                               results (conj results result)]
                         (log opts "    " (short-outcome result) (:name result))
                         (P/recur tests context results))))
-          outcome (if (some failure? results) :fail :pass)]
+          outcome (if (some failure? results) :fail :pass)
+          suite (assoc suite :outcome outcome :tests results)]
 
     (log opts) ; breath between suites
 
-    {:outcome outcome
-     :name (:name suite)
-     :tests results}))
+    (select-keys suite [:outcome :name :tests])))
 
 (def VERBOSE-SUMMARY-KEYS [:code :signal :stdout :stderr])
 

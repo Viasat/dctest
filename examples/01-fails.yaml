@@ -34,3 +34,11 @@ tests:
     steps:
       - exec: node2
         run: /bin/true
+
+  fail-expressions:
+    name: Test thrown exception in expressions
+    steps:
+      - exec: node1
+        env:
+          FOO: ${{ throw("Intentional Failure") }}
+        run: /bin/true

@@ -7,6 +7,8 @@
             [clojure.string :as S]
             [clojure.walk :refer [postwalk]]
             [dctest.expressions :as expr]
+            [dctest.outcome :refer [failure? pending? pending-> short-outcome
+                                    fail! pass! skip!]]
             [dctest.util :as util :refer [obj->str js->map log indent indent-print-table-str]]
             [promesa.core :as P]
             [viasat.retry :as retry]
@@ -16,7 +18,8 @@
             ["stream" :as stream]
             ["child_process" :as cp]
             #_["dockerode$default" :as Docker]
-            ))
+            )
+  (:require-macros dctest.outcome))
 
 ;; TODO: use require syntax when shadow-cljs works with "*$default"
 (def Docker (js/require "dockerode"))
@@ -128,14 +131,6 @@ Options:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Test Runner
 
-(defn failure? [{:keys [outcome]}]
-  (= :fail outcome))
-(defn pending? [{:keys [outcome]}]
-  (nil? outcome))
-
-(defn short-outcome [{:keys [outcome]}]
-  (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
-
 (defn interpolate-any [context v]
   (let [f #(expr/interpolate-text context %)]
     (cond
@@ -180,11 +175,13 @@ Options:
                    (fn [err] {:error {:message (.-message err)}}))
 
           {:keys [code signal ExitCode error]} result
-          code (or code ExitCode)]
+          code (or code ExitCode)
+          step (if error
+                 (fail! step error)
+                 step)]
     (merge step
            {:stdout (S/join "" @stdout)
             :stderr (S/join "" @stderr)}
-           (when error {:outcome :fail :error error})
            (when code {:code code})
            (when signal {:signal signal}))))
 
@@ -195,7 +192,7 @@ Options:
                              {:message (str "Condition not met: " expr)
                               :debug (expr/explain-refs context expr)}))
                          (:expect step)))]
-    (assoc step :outcome :fail :error error)
+    (fail! step error)
     step))
 
 (defn execute-step-retries [context step]
@@ -203,35 +200,33 @@ Options:
           run-attempt (fn []
                         (P/let [step (run-exec context step)
                                 context (assoc context :step step)
-                                step (if (pending? step)
-                                       step
-                                       (run-expectations context step))]
+                                step (pending-> step
+                                                (->> (run-expectations context)))]
                           step))]
     (retry/retry-times run-attempt
                        retries
                        {:delay-ms interval
                         :check-fn #(not (failure? %))})))
 
+(defn skip-if-necessary [context m]
+  (if (expr/read-eval context (:if m))
+    m
+    (skip! m)))
+
 (defn execute-step [context step]
-  (P/let [skip? (not (expr/read-eval context (:if step)))]
+  (P/let [step (pending-> step
+                          (->> (skip-if-necessary context))
+                          (update :env #(interpolate-any context %)))
+          context (update context :env merge
+                          (when (pending? step) (:env step)))
 
-    (if skip?
-      (merge {:outcome :skip}
-             (select-keys step [:name]))
-
-      (P/let [step (update step :env #(interpolate-any context %))
-              context (update context :env merge (:env step))
-
-              step (-> step
-                       (update :name #(interpolate-any context %))
-                       (update :exec #(interpolate-any context %))
-                       (update :run #(interpolate-any context %)))
-              step (execute-step-retries context step)
-
-              step (if (pending? step)
-                     (assoc step :outcome :pass)
-                     step)]
-        (select-keys step [:outcome :name :error])))))
+          step (pending-> step
+                          (update :name #(interpolate-any context %))
+                          (update :exec #(interpolate-any context %))
+                          (update :run #(interpolate-any context %))
+                          (->> (execute-step-retries context))
+                          pass!)]
+    (select-keys step [:outcome :name :error])))
 
 (defn execute-steps [context test]
   (P/loop [steps (:steps test)
@@ -246,22 +241,26 @@ Options:
               step (execute-step context step)
               test (update test :steps conj step)
               test (if (failure? step)
-                     (assoc test :outcome :fail)
+                     (fail! test)
                      test)]
         (P/recur steps test context)))))
 
 (defn run-test [context suite test]
   (P/let [opts (:opts context)
 
-          test (update test :env #(interpolate-any context %))
-          context (update context :env merge (:env test))
+          test (pending-> test
+                          (update :env #(interpolate-any context %)))
+          context (update context :env merge
+                          (when (pending? test) (:env test)))
 
-          test (update test :name #(interpolate-any context %))
-          test (execute-steps context test)
+          test (pending-> test
+                          (update :name #(interpolate-any context %))
+                          (->> (execute-steps context))
+                          pass!)
 
-          test (if-let [error (:error (first (filter failure? (:steps test))))]
-                 (assoc test :outcome :fail :error error)
-                 (assoc test :outcome :pass))
+          test (if-let [error (first (keep :error (:steps test)))]
+                 (assoc test :error error)
+                 test)
           _ (log opts "    " (short-outcome test) (:name test))]
 
     (select-keys test [:id :name :outcome :steps :error])))
@@ -301,27 +300,26 @@ Options:
               test (run-test context suite test)
               suite (update suite :tests conj test)
               suite (if (failure? test)
-                      (assoc suite :outcome :fail)
+                      (fail! suite)
                       suite)]
         (P/recur tests suite context)))))
 
 (defn run-suite [context suite]
   (P/let [opts (:opts context)
 
-          suite (update suite :env #(interpolate-any context %))
-          context (update context :env merge (:env suite))
+          suite (pending-> suite
+                           (update :env #(interpolate-any context %)))
+          context (update context :env merge
+                          (when (pending? suite) (:env suite)))
 
-          suite (-> suite
-                    (update :name #(interpolate-any context %))
-                    (update :tests #(resolve-test-order % (:test-filter opts))))
-
+          suite (pending-> suite
+                           (update :name #(interpolate-any context %))
+                           (update :tests #(resolve-test-order % (:test-filter opts))))
           _ (log opts)
           _ (log opts "  " (:name suite))
-
-          suite (run-tests context suite)
-          suite (if (pending? suite)
-                  (assoc suite :outcome :pass)
-                  suite)]
+          suite (pending-> suite
+                           (->> (run-tests context))
+                           pass!)]
 
     (select-keys suite [:outcome :name :tests])))
 
@@ -340,7 +338,6 @@ Options:
 (def VERBOSE-SUMMARY-KEYS [:code :signal :stdout :stderr])
 
 (defn summarize [results verbose-results]
-  ;; Note: Suite can fail in setup/teardown, when all tests pass
   (let [overall (if (some failure? results) :fail :pass)
         test-totals (frequencies (map :outcome (mapcat :tests results)))
         results-data (if verbose-results

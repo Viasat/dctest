@@ -21,6 +21,9 @@
    "always"  {:arity 0 :fn (constantly true)}
    "success" {:arity 0 :fn #(not (get-in % [:state :failed]))}
    "failure" {:arity 0 :fn #(boolean (get-in % [:state :failed]))}
+
+   ;; Error functions
+   "throw" {:arity 1 :fn #(throw (ex-info %2 {}))}
    })
 
 (def BEGIN_INTERP "${{")

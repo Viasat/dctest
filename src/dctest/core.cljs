@@ -353,8 +353,9 @@ Options:
     (vec (mapcat suite-errors suites))))
 
 (defn summarize [results verbose-results]
-  (let [overall (if (some failure? results) :fail :pass)
-        test-totals (frequencies (map :outcome (mapcat :tests results)))
+  (let [outcome (if (some failure? results) :failed :passed)
+        test-totals (merge {:passed 0 :failed 0}
+                           (frequencies (map :outcome (mapcat :tests results))))
         errors (summarize-errors results)
         results-data (if verbose-results
                        results
@@ -362,9 +363,10 @@ Options:
                                     (apply dissoc % VERBOSE-SUMMARY-KEYS)
                                     %)
                                  results))]
-    (merge {:pass 0 :fail 0}
-           test-totals
-           {:outcome overall :results results-data :errors errors})))
+    {:summary (merge {:outcome outcome}
+                     test-totals)
+     :results results-data
+     :errors errors}))
 
 (defn print-results [opts summary]
   (when (seq (:errors summary))
@@ -384,10 +386,11 @@ Options:
                                      (map #(zipmap columns %) details)
                                      "      ")))))
 
-  (log opts)
-  (log opts
-       (:pass summary) "passing,"
-       (:fail summary) "failed"))
+  (let [summary (:summary summary)]
+    (log opts)
+    (log opts
+         (:passed summary) "passing,"
+         (:failed summary) "failed")))
 
 (defn write-results-file [opts summary]
   (when-let [path (:results-file opts)]
@@ -410,6 +413,7 @@ Options:
 (defn normalize [suite path]
   (let [->step (fn [index step]
                  (-> step
+                     (assoc :outcome :pending)
                      (update :env update-keys name)
                      (update :expect #(if (string? %) [%] %))
                      (update :index #(or % 1))
@@ -417,10 +421,12 @@ Options:
                      (update-in [:repeat :interval] parse-interval)))
         ->test (fn [test id]
                  (-> (merge {:name id} test)
+                     (assoc :outcome :pending)
                      (update :env update-keys name)
                      (update :steps #(vec (map-indexed ->step %)))))
         ->suite (fn [suite path]
                   (-> (merge {:name path} suite)
+                      (assoc :outcome :pending)
                       (update :env update-keys name)
                       (update :tests update-keys name)
                       (update :tests #(into {} (for [[id t] %]

@@ -1,21 +1,21 @@
 (ns dctest.outcome)
 
 (defn short-outcome [{:keys [outcome]}]
-  (get {:pass "✓" :fail "F" :skip "S"} outcome "?"))
+  (get {:passed "✓" :failed "F" :skipped "S"} outcome "?"))
 
 (defn failure? [{:keys [outcome]}]
-  (= :fail outcome))
+  (= :failed outcome))
 
 (defn pending? [{:keys [outcome]}]
-  (nil? outcome))
+  (= :pending outcome))
 
 (defn fail! [m & [error]]
   (merge m
-         {:outcome :fail}
+         {:outcome :failed}
          (when error {:error error})))
 
-(defn pass! [m] (assoc m :outcome :pass))
-(defn skip! [m] (assoc m :outcome :skip))
+(defn pass! [m] (assoc m :outcome :passed))
+(defn skip! [m] (assoc m :outcome :skipped))
 
 ;; This macros is duplicated in outcome.cljs and outcome.clj to support both
 ;; ShadowCLJS and nbb. Keep in sync.

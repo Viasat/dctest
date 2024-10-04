@@ -1,0 +1,51 @@
+$defs:
+  error:
+    type: object
+    required: [ message ]
+    properties:
+      message: { type: string }
+  outcome: { type: string, enum: [ passed, failed, skipped ] }
+
+type: object
+additionalProperties: false
+required: [ summary, tests, errors ]
+properties:
+
+  summary:
+    type: object
+    additionalProperties: false
+    required: [ passed, failed ]
+    properties:
+      outcome: { "$ref": "#/$defs/outcome" }
+      passed: { type: integer }
+      failed: { type: integer }
+
+  tests:
+    type: array
+    items:
+
+      # test
+      type: object
+      additionalProperties: false
+      required: [ id, name, outcome, steps ]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        outcome: { "$ref": "#/$defs/outcome" }
+        error: { "$ref": "#/$defs/error" }
+        steps:
+          type: array
+          items:
+
+            # step
+            type: object
+            additionalProperties: false
+            required: [ name, outcome ]
+            properties:
+              name: { type: string }
+              outcome: { "$ref": "#/$defs/outcome" }
+              error: { "$ref": "#/$defs/error" }
+
+  errors:
+    type: array
+    items: { "$ref": "#/$defs/error" }

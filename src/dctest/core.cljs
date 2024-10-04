@@ -34,7 +34,6 @@ Options:
   --continue-on-error           Continue running tests, even if one fails
   --quiet                       Only print final totals
   --verbose-commands            Show live stdout/stderr from test commands
-  --verbose-results             Verbose results file (with errors, output, etc)
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
   --schema-file SCHEMA          Path to schema file [env: DCTEST_SCHEMA]
                                 [default: ./schema.yaml]
@@ -331,8 +330,6 @@ Options:
               results (conj results suite)]
         (P/recur results remaining)))))
 
-(def VERBOSE-SUMMARY-KEYS [:code :signal :stdout :stderr])
-
 (defn summarize-errors [suites]
   (let [step-error (fn [path step]
                      (let [path (conj path (:name step))]
@@ -352,20 +349,16 @@ Options:
                                (mapcat #(test-errors path %) (:tests suite)))))]
     (vec (mapcat suite-errors suites))))
 
-(defn summarize [results verbose-results]
+(defn summarize [results]
   (let [outcome (if (some failure? results) :failed :passed)
-        test-totals (merge {:passed 0 :failed 0}
-                           (frequencies (map :outcome (mapcat :tests results))))
         errors (summarize-errors results)
-        results-data (if verbose-results
-                       results
-                       (postwalk #(if (map? %)
-                                    (apply dissoc % VERBOSE-SUMMARY-KEYS)
-                                    %)
-                                 results))]
+
+        tests (mapcat :tests results)
+        test-totals (merge {:passed 0 :failed 0}
+                           (frequencies (map :outcome tests)))]
     {:summary (merge {:outcome outcome}
                      test-totals)
-     :results results-data
+     :tests tests
      :errors errors}))
 
 (defn print-results [opts summary]
@@ -455,7 +448,7 @@ Options:
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
           {:keys [continue-on-error project test-suite test-filter
-                  quiet verbose-commands verbose-results]} opts
+                  quiet verbose-commands]} opts
           _ (when (empty? test-suite)
               (Eprintln (str "WARNING: no test-suite was specified")))
 
@@ -473,7 +466,7 @@ Options:
                      (load-test-suite! opts path)))
 
           results (run-suites context suites)
-          summary (summarize results verbose-results)]
+          summary (summarize results)]
 
     (write-results-file opts summary)
     (print-results opts summary)

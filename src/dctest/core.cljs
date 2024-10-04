@@ -257,10 +257,6 @@ Options:
                           (update :name #(interpolate-any context %))
                           (->> (execute-steps context))
                           pass!)
-
-          test (if-let [error (first (keep :error (:steps test)))]
-                 (assoc test :error error)
-                 test)
           _ (log opts "    " (short-outcome test) (:name test))]
 
     (select-keys test [:id :name :outcome :steps :error])))
@@ -337,9 +333,29 @@ Options:
 
 (def VERBOSE-SUMMARY-KEYS [:code :signal :stdout :stderr])
 
+(defn summarize-errors [suites]
+  (let [step-error (fn [path step]
+                     (let [path (conj path (:name step))]
+                       (when-let [error (:error step)]
+                         (assoc error :path path))))
+        test-errors (fn [path test]
+                      (let [path (conj path (:name test))
+                            errors (when-let [error (:error test)]
+                                     [(assoc error :path path)])]
+                        (into errors
+                              (keep #(step-error path %) (:steps test)))))
+        suite-errors (fn [suite]
+                       (let [path [(:name suite)]
+                             errors (when-let [error (:error suite)]
+                                      [(assoc error :path path)])]
+                         (into errors
+                               (mapcat #(test-errors path %) (:tests suite)))))]
+    (vec (mapcat suite-errors suites))))
+
 (defn summarize [results verbose-results]
   (let [overall (if (some failure? results) :fail :pass)
         test-totals (frequencies (map :outcome (mapcat :tests results)))
+        errors (summarize-errors results)
         results-data (if verbose-results
                        results
                        (postwalk #(if (map? %)
@@ -348,26 +364,25 @@ Options:
                                  results))]
     (merge {:pass 0 :fail 0}
            test-totals
-           {:outcome overall :results results-data})))
+           {:outcome overall :results results-data :errors errors})))
 
 (defn print-results [opts summary]
-  (doseq [suite (:results summary)]
-    (doseq [[index {test-name :name
-                    error :error}]
-            , (->> (:tests suite)
-                   (filter failure?)
-                   (map-indexed vector))]
-      (log opts)
-      (log opts "  " (inc index) ")" test-name)
-      (log opts "     " (:message error))
+  (when (seq (:errors summary))
+    (log opts)
+    (log opts "   Errors:"))
 
-      (let [columns ["reference" "value"]
-            details (:debug error)]
-        (when details
-          (log opts
-               (indent-print-table-str columns
-                                       (map #(zipmap columns %) details)
-                                       "      "))))))
+  (doseq [[index error] (map-indexed vector (:errors summary))]
+    (log opts)
+    (log opts "  " (inc index) ")" (:message error))
+    (log opts "     in:" (S/join " > " (:path error)))
+
+    (let [columns ["reference" "value"]
+          details (:debug error)]
+      (when details
+        (log opts
+             (indent-print-table-str columns
+                                     (map #(zipmap columns %) details)
+                                     "      ")))))
 
   (log opts)
   (log opts

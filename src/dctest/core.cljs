@@ -213,7 +213,8 @@ Options:
     (skip! m)))
 
 (defn execute-step [context step]
-  (P/let [step (pending-> step
+  (P/let [start (js/Date.now)
+          step (pending-> step
                           (->> (skip-if-necessary context))
                           (update :env #(interpolate-any context %)))
           context (update context :env merge
@@ -224,8 +225,10 @@ Options:
                           (update :exec #(interpolate-any context %))
                           (update :run #(interpolate-any context %))
                           (->> (execute-step-retries context))
-                          pass!)]
-    (select-keys step [:outcome :name :error])))
+                          pass!)
+          stop (js/Date.now)
+          step (assoc step :start start :stop stop)]
+    (select-keys step [:outcome :name :start :stop :error])))
 
 (defn execute-steps [context test]
   (P/loop [steps (:steps test)
@@ -246,6 +249,7 @@ Options:
 
 (defn run-test [context suite test]
   (P/let [opts (:opts context)
+          start (js/Date.now)
 
           test (pending-> test
                           (update :env #(interpolate-any context %)))
@@ -256,9 +260,14 @@ Options:
                           (update :name #(interpolate-any context %))
                           (->> (execute-steps context))
                           pass!)
-          _ (log opts "    " (short-outcome test) (:name test))]
 
-    (select-keys test [:id :name :outcome :steps :error])))
+          stop (js/Date.now)
+          test (assoc test :start start :stop stop)
+
+          duration-in-sec (js/Math.floor (/ (- stop start) 1000))
+          _ (log opts "    " (short-outcome test) (:name test) (str "(" duration-in-sec "s)"))]
+
+    (select-keys test [:id :name :outcome :start :stop :steps :error])))
 
 (defn filter-tests [graph filter-str]
   (let [raw-list (if (= "*" filter-str)
@@ -349,14 +358,18 @@ Options:
                                (mapcat #(test-errors path %) (:tests suite)))))]
     (vec (mapcat suite-errors suites))))
 
-(defn summarize [results]
+(defn summarize [context results]
   (let [outcome (if (some failure? results) :failed :passed)
         errors (summarize-errors results)
+        start (:start context)
+        stop (:stop context)
 
         tests (mapcat :tests results)
         test-totals (merge {:passed 0 :failed 0}
                            (frequencies (map :outcome tests)))]
-    {:summary (merge {:outcome outcome}
+    {:summary (merge {:outcome outcome
+                      :start start
+                      :stop stop}
                      test-totals)
      :tests tests
      :errors errors}))
@@ -455,6 +468,7 @@ Options:
           context {:docker (Docker.)
                    :env {"COMPOSE_PROJECT_NAME" project}
                    :process (js-process)
+                   :start (js/Date.now)
                    :opts {:project project
                           :quiet quiet
                           :test-filter test-filter
@@ -466,7 +480,9 @@ Options:
                      (load-test-suite! opts path)))
 
           results (run-suites context suites)
-          summary (summarize results)]
+          context (assoc context :stop (js/Date.now))
+
+          summary (summarize context results)]
 
     (write-results-file opts summary)
     (print-results opts summary)

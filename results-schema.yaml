@@ -14,11 +14,13 @@ properties:
   summary:
     type: object
     additionalProperties: false
-    required: [ passed, failed ]
+    required: [ passed, failed, start, stop ]
     properties:
       outcome: { "$ref": "#/$defs/outcome" }
       passed: { type: integer }
       failed: { type: integer }
+      start: { type: integer }
+      stop: { type: integer }
 
   tests:
     type: array
@@ -27,12 +29,14 @@ properties:
       # test
       type: object
       additionalProperties: false
-      required: [ id, name, outcome, steps ]
+      required: [ id, name, outcome, start, stop, steps ]
       properties:
         id: { type: string }
         name: { type: string }
         outcome: { "$ref": "#/$defs/outcome" }
         error: { "$ref": "#/$defs/error" }
+        start: { type: integer }
+        stop: { type: integer }
         steps:
           type: array
           items:
@@ -40,11 +44,13 @@ properties:
             # step
             type: object
             additionalProperties: false
-            required: [ name, outcome ]
+            required: [ name, outcome, start, stop ]
             properties:
               name: { type: string }
               outcome: { "$ref": "#/$defs/outcome" }
               error: { "$ref": "#/$defs/error" }
+              start: { type: integer }
+              stop: { type: integer }
 
   errors:
     type: array

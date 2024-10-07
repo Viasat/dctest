@@ -20,6 +20,6 @@ case "$(basename "${0}")" in
   runtests) MAIN=runtests ;;
 esac
 
-DCTEST_SCHEMA="${DCTEST_SCHEMA:-${DCTEST}/schema.yaml}" \
+DCTEST_SCHEMA="${DCTEST_SCHEMA:-${DCTEST}/schemas/input.yaml}" \
   NODE_PATH="${TOP}/node_modules/" exec ${NBB} -cp "${NBB_CP}" \
   -m "${MAIN}" "${@}"

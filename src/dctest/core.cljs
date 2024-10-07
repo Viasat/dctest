@@ -35,8 +35,8 @@ Options:
   --quiet                       Only print final totals
   --verbose-commands            Show live stdout/stderr from test commands
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
-  --schema-file SCHEMA          Path to schema file [env: DCTEST_SCHEMA]
-                                [default: ./schema.yaml]
+  --schema-file SCHEMA          Path to input schema file [env: DCTEST_SCHEMA]
+                                [default: ./schemas/input.yaml]
 ")
 
 (set! *warn-on-infer* false)

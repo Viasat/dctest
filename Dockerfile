@@ -23,7 +23,7 @@ RUN cd /app && \
 FROM node:16-slim AS run
 
 COPY --from=build /app/ /app/
-ADD schema.yaml /app/
+ADD schemas/ /app/schemas/
 
 ENTRYPOINT ["/app/build/dctest.js"]
 WORKDIR /app

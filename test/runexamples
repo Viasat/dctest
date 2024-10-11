@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+PROJECT=${PROJECT:-${USER}}
+DCTEST_IMAGE=${DCTEST_IMAGE}
+
+repo_root=$(dirname $(readlink -f "${0}"))/..
+examples_dir=${repo_root}/examples
+
+results_dir=$(mktemp -d)
+
+dc() { docker compose -p ${PROJECT} -f ${examples_dir}/docker-compose.yaml "${@}"; }
+up() { dc up -d; }
+down() { dc down; }
+
+fail() {
+  msg=${1}
+  down
+  echo $msg
+  exit 1
+}
+
+check() {
+  passed=${1}; shift
+  failed=${1}; shift
+  example_files=${@}
+
+  if [ -z "${DCTEST_IMAGE}" ]; then
+    cmd="${repo_root}/dctest --continue-on-error --results-file ${results_dir}/results.json ${PROJECT}"
+    for example in ${example_files}; do
+      cmd="${cmd} ${examples_dir}/${example}"
+    done
+  else
+    cmd="docker run --rm -v /var/run/docker.sock:/var/run/docker.sock"
+    cmd="${cmd} -v ${repo_root}/examples/:/app/examples -v ${results_dir}/:/app/results"
+    cmd="${cmd} ${DCTEST_IMAGE} --continue-on-error --results-file /app/results/results.json ${PROJECT}"
+    for example in ${example_files}; do
+      cmd="${cmd} /app/examples/${example}"
+    done
+  fi
+
+  echo "Running: ${cmd}"
+  ${cmd}
+  exitcode=$?
+
+  if [ "${failed}" == "0" ]; then
+    expected_exitcode="0"
+  else
+    expected_exitcode="1"
+  fi
+
+  [ "${expected_exitcode}" == "${exitcode}" ] \
+    || fail "Exit code ${exitcode} doesn't match expected ${expected_exitcode}"
+
+  jq --exit-status '[.summary.passed == '${passed}', .summary.failed == '${failed}'] | all' ${results_dir}/results.json \
+    || fail "Results file does not match expected passed/fail rate"
+
+  node ${repo_root}/scripts/validateSchema.js ${results_dir}/results.json ${repo_root}/schemas/results-file.yaml \
+    || fail "Results file does not match schema"
+}
+
+
+# TESTS
+
+up
+
+check 5  0 00-intro.yaml
+check 6  4 00-intro.yaml 01-fails.yaml
+check 12 0 02-deps.yaml
+
+down

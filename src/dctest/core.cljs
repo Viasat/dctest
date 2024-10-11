@@ -7,7 +7,7 @@
             [clojure.string :as S]
             [clojure.walk :refer [postwalk]]
             [dctest.expressions :as expr]
-            [dctest.outcome :refer [failure? pending? pending-> short-outcome
+            [dctest.outcome :refer [failure? passed? pending? pending-> short-outcome
                                     fail! pass! skip!]]
             [dctest.util :as util :refer [obj->str js->map log indent indent-print-table-str]]
             [promesa.core :as P]
@@ -487,4 +487,4 @@ Options:
     (write-results-file opts summary)
     (print-results opts summary)
 
-    (when (failure? summary) (fatal 1))))
+    (when-not (passed? (:summary summary)) (fatal 1))))

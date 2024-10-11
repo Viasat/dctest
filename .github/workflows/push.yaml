@@ -24,9 +24,22 @@ jobs:
       - name: Run Tests
         run: ./test/runtests
 
+  test-examples-node:
+    name: Test Examples (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with: { submodules: 'recursive', fetch-depth: 0 }
+
+      - name: Install NPM
+        run: npm install
+
+      - name: Run Examples
+        run: ./test/runexamples
 
   test-examples:
-    name: Test Examples
+    name: Test Examples (Docker)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -37,51 +50,10 @@ jobs:
         run: |
           docker build -t dctest .
 
-      - name: Setup Fixtures
-        run: |
-          docker compose -f examples/docker-compose.yaml up -d
-
       - name: Install NPM (for schema validation)
         run: npm install
 
-      - name: Run Intro Examples
-        run: |
-          # Some examples demonstate failure.
-          # Swallow exit code and check the result counts.
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v $(pwd)/examples:/app/examples \
-            dctest --results-file /app/examples/results.json examples /app/examples/00-intro.yaml \
-            || true
-          jq --exit-status '[.summary.passed == 5, .summary.failed == 0] | all' examples/results.json && \
-            node ./scripts/validateSchema.js examples/results.json schemas/results-file.yaml
-
-      - name: Run Intro + Fail Examples with --continue-on-error
-        run: |
-          # Some examples demonstate failure.
-          # Swallow exit code and check the result counts.
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v $(pwd)/examples:/app/examples \
-            dctest --continue-on-error --results-file /app/examples/results.json examples /app/examples/00-intro.yaml /app/examples/01-fails.yaml \
-            || true
-          jq --exit-status '[.summary.passed == 6, .summary.failed == 4] | all' examples/results.json && \
-            node ./scripts/validateSchema.js examples/results.json schemas/results-file.yaml
-
-      - name: Run Dependency Examples
-        run: |
-          # Some examples demonstate failure.
-          # Swallow exit code and check the result counts.
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v $(pwd)/examples:/app/examples \
-            dctest --results-file /app/examples/results.json examples /app/examples/02-deps.yaml \
-            || true
-          jq --exit-status '[.summary.passed == 12, .summary.failed == 0] | all' examples/results.json && \
-            node ./scripts/validateSchema.js examples/results.json schemas/results-file.yaml
-
-
-      - name: Setup Fixtures
-        if: always()
-        run: |
-          docker compose -f examples/docker-compose.yaml down -t 1 --remove-orphans
+      - name: Run Examples
+        env:
+          DCTEST_IMAGE: dctest
+        run: ./test/runexamples

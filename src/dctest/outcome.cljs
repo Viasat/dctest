@@ -6,6 +6,9 @@
 (defn failure? [{:keys [outcome]}]
   (= :failed outcome))
 
+(defn passed? [{:keys [outcome]}]
+  (= :passed outcome))
+
 (defn pending? [{:keys [outcome]}]
   (= :pending outcome))
 

@@ -141,8 +141,9 @@ Options:
 (defn run-exec
   "Executes a step 'run' command on either the outer/host platform
   or the docker compose service. Step must already be interpolated.
-  Returns 'error' for non-zero exit code or unexpected exceptions,
-  along with any gathered stdout/stderr, code, and signal."
+  Returns step, updated with any gathered stdout/stderr, code, and
+  signal. Fails step for non-zero exit code or unexpected
+  exceptions."
   [context step]
   (P/let [{:keys [docker env]} context
           {:keys [project verbose-commands]} (:opts context)
@@ -184,7 +185,11 @@ Options:
            (when code {:code code})
            (when signal {:signal signal}))))
 
-(defn run-expectations [context step]
+(defn run-expectations
+  "Evaluates all step 'expect' expressions, and asserts all are truthy.
+   Step must already be interpolated. Fails step if any expression is falsy
+   or an exception is thrown during evaluation."
+  [context step]
   (if-let [error (first
                    (keep (fn [expr]
                            (when-not (expr/read-eval context expr)
@@ -194,7 +199,13 @@ Options:
     (fail! step error)
     step))
 
-(defn execute-step-retries [context step]
+(defn execute-step-retries
+  "Takes an already interpolated step, and returns it unmodified once
+  'run' exec and all 'expect' conditions succeed. Retries 'run' exec
+  if 'run' or any 'expect' condition fail, up to the user specified
+  'repeat'.'retries' count. Marks step as failed, if retries are
+  exhausted; otherwise, return step unmodified."
+  [context step]
   (P/let [{:keys [interval retries]} (:repeat step)
           run-attempt (fn []
                         (P/let [step (run-exec context step)
@@ -207,12 +218,28 @@ Options:
                        {:delay-ms interval
                         :check-fn #(not (failure? %))})))
 
-(defn skip-if-necessary [context m]
-  (if (expr/read-eval context (:if m))
-    m
-    (skip! m)))
+(defn skip-if-necessary
+  "Evaluates the step 'if' expression. Marks step as skipped, if 'if'
+  evaluates to falsy; otherwise, returns step unmodified."
+  [context step]
+  (if (expr/read-eval context (:if step))
+    step
+    (skip! step)))
 
-(defn execute-step [context step]
+(defn execute-step
+  "Takes an uninterpolated step, and runs it to completion. Returns step
+  with final outcome and any keys that were successfully interpolated.
+  Running includes:
+
+   - evaluating 'if'
+   - interpolating keys ('env', 'name', ...)
+   - executing 'run' and 'expect' conditions
+
+  Short-circuits if skipped ('if' is falsy) or any aspect fails (including
+  any errors during interpolation of keys). On failure, fail the step
+  while returning as many successfully interpolated keys as possible,
+  especially useful for the 'name' key."
+  [context step]
   (P/let [start (js/Date.now)
           step (pending-> step
                           (->> (skip-if-necessary context))
@@ -230,7 +257,10 @@ Options:
           step (assoc step :start start :stop stop)]
     (select-keys step [:outcome :name :start :stop :error])))
 
-(defn execute-steps [context test]
+(defn execute-steps
+  "Runs all steps for a test. Returns test with completed steps.
+  Fails test, if any step fails."
+  [context test]
   (P/loop [steps (:steps test)
            test (assoc test :steps [])
            context context]
@@ -248,6 +278,16 @@ Options:
         (P/recur steps test context)))))
 
 (defn run-test [context suite test]
+  "Takes an uninterpolated test, and runs it to completion. Returns test
+  with final outcome and any keys that were successfully interpolated.
+  Running includes:
+
+   - interpolating keys ('env', 'name', ...)
+   - running all 'steps'
+
+  Fail the test if any interpolated key throws an error or any step fails.
+  If any key cannot be interpolated successfully, do not run steps, but do
+  return any already successfully interpolated keys (e.g. 'name' is useful)."
   (P/let [opts (:opts context)
           start (js/Date.now)
 
@@ -275,7 +315,10 @@ Options:
                      (S/split filter-str #","))]
     (keys (select-keys graph raw-list))))
 
-(defn resolve-test-order [test-map filter-str]
+(defn resolve-test-order
+  "Takes the id->test mapping defined by suites along with a filter
+  string, and returns the ordered list of tests to be run."
+  [test-map filter-str]
   (let [dep-graph (into {} (for [[id test] test-map]
                              (let [depends (:depends test)]
                                [id (if (map? depends)
@@ -292,7 +335,11 @@ Options:
           (get id)
           (assoc :id id)))))
 
-(defn run-tests [context suite]
+(defn run-tests
+  "Runs all tests for a suite. Assumes tests are already ordered.
+  Returns suite with any completed tests (tests can be omitted,
+  if not --continue-on-error). Fails suite, if any test fails."
+  [context suite]
   (P/loop [tests (:tests suite)
            suite (assoc suite :tests [])
            context context]
@@ -308,7 +355,19 @@ Options:
                       suite)]
         (P/recur tests suite context)))))
 
-(defn run-suite [context suite]
+(defn run-suite
+  "Takes an uninterpolated suite, and runs it to completion. Returns
+  suite with final outcome and any keys that were successfully
+  interpolated. Running includes:
+
+   - interpolating keys ('env', 'name', ...)
+   - filtering and ordering tests to be run
+   - running selected tests
+
+  Fail the suite if any interpolated key throws an error or any test fails.
+  If any key cannot be interpolated successfully, do not run tests, but do
+  return any already successfully interpolated keys (e.g. 'name' is useful)."
+  [context suite]
   (P/let [opts (:opts context)
 
           suite (pending-> suite
@@ -358,7 +417,10 @@ Options:
                                (mapcat #(test-errors path %) (:tests suite)))))]
     (vec (mapcat suite-errors suites))))
 
-(defn summarize [context results]
+(defn summarize
+  "Takes list of completed suite results and returns a summary in the
+  --results-file format."
+  [context results]
   (let [outcome (if (some failure? results) :failed :passed)
         errors (summarize-errors results)
         start (:start context)
@@ -416,7 +478,22 @@ Options:
         (+ seconds)
         (* 1000))))
 
-(defn normalize [suite path]
+(defn normalize
+  "Set any remaining defaults not set by input schema, and
+  normalize types for a suite and its tests and steps.
+
+  Always set (not user inputs):
+  - outcome: set to :pending
+
+  Default, if omitted by user:
+  - index: set to 1
+  - name: use suite filename, test id, and step index
+
+  Normalized types:
+  - env: ensure keys are strings, not keywords
+  - expect: ensure always a vector of expressions
+  - interval: parse user formatted string into integer (ms)"
+  [suite path]
   (let [->step (fn [index step]
                  (-> step
                      (assoc :outcome :pending)
@@ -473,6 +550,7 @@ Options:
                           :quiet quiet
                           :test-filter test-filter
                           :verbose-commands verbose-commands}
+                   :state {:failed false}
                    :strategy {:continue-on-error continue-on-error}}
 
           suites (P/all
@@ -482,6 +560,8 @@ Options:
           results (run-suites context suites)
           context (assoc context :stop (js/Date.now))
 
+          ;; Use the same summary data for both user-display and results file
+          ;; to ensure users have all the same info to build their own summaries
           summary (summarize context results)]
 
     (write-results-file opts summary)

@@ -1,0 +1,8 @@
+- **Home**
+  - [Getting Started](/)
+- **Reference**
+  - [Input Syntax](/reference/latest/input)
+  - [Results File Schema](/reference/latest/results-file)
+  - [Expressions](/reference/latest/expressions)
+- **Examples**
+  - [View on GitHub](https://github.com/Viasat/dctest/tree/main/examples)

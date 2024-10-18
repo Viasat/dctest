@@ -1,0 +1,10 @@
+- **Home**
+  - [Getting Started](/)
+- **Guides**
+  - [Writing Tests](/guides/writing-tests.md)
+- **Reference**
+  - [Input Syntax](/reference/latest/input)
+  - [Expressions](/reference/latest/expressions)
+  - [Results File Schema](/reference/latest/results-file)
+- **Examples**
+  - [View on GitHub](https://github.com/Viasat/dctest/tree/main/examples)

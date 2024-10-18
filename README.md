@@ -25,6 +25,8 @@ supplying the project name ("demo") and the tests we want to run:
 ```
 
 See `dctest --help` for more CLI options, such as `--continue-on-error`.
+[Guides and reference](https://viasat.github.io/dctest/) documentation are also
+available.
 
 ## Install and Run
 

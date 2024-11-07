@@ -11,6 +11,7 @@
     [viasat.util :refer [Eprintln fatal read-file]]
     ["js-yaml" :as yaml]
     #_["ajv$default" :as Ajv]
+    ["@dotenvx/dotenvx" :as dotenvx]
     ))
 
 ;; TODO: use require syntax when shadow-cljs works with "*$default"
@@ -60,6 +61,17 @@
       (catch yaml/YAMLException err
         (Eprintln "Failure to load file:" path)
         (fatal 2 (.-message err))))))
+
+(defn load-env [path]
+  "Parse an environment file at path and do variable
+  interpolation/expansion similar to what is supported by docker
+  compose (which is a subset of posix shell variable expansion).
+  Return a map of variable names to values."
+  [path]
+  (P/let [env-raw (read-file path)
+        result (dotenvx/parse env-raw #js {:override true}) ]
+    (prn :result (js->clj result))
+    (js->clj result)))
 
 (defn ajv-error-to-str [error]
   (let [path (:instancePath error)

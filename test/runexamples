@@ -62,6 +62,7 @@ check() {
 # TESTS
 
 copt="--continue-on-error"
+eopt="--environ-file ${repo_root}/examples/03-env-file"
 
 up
 
@@ -69,5 +70,7 @@ check 5  0 "${copt}        " 00-intro.yaml
 check 6  4 "${copt}        " 00-intro.yaml 01-fails.yaml
 check 5  1 "               " 00-intro.yaml 01-fails.yaml
 check 12 0 "${copt}        " 02-deps.yaml
+check 4  0 "${copt} ${eopt}" 03-env.yaml
+check 2  2 "${copt}        " 03-env.yaml
 
 down

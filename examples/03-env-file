@@ -1,0 +1,4 @@
+BAR=x
+BAR=${BAR:+c}
+BAR="b${BAR:-C}d"
+BAR="a${BAR:-SEE}e"

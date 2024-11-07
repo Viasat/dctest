@@ -37,6 +37,7 @@ Options:
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
   --schema-file SCHEMA          Path to input schema file [env: DCTEST_SCHEMA]
                                 [default: ./schemas/input.yaml]
+  --environ-file FILE           Load and parse FILE as default env settings.
 ")
 
 (set! *warn-on-infer* false)
@@ -538,12 +539,14 @@ Options:
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
           {:keys [continue-on-error project test-suite test-filter
-                  quiet verbose-commands]} opts
+                  quiet verbose-commands environ-file]} opts
           _ (when (empty? test-suite)
               (Eprintln (str "WARNING: no test-suite was specified")))
 
+          default-env (when environ-file (util/load-env environ-file))
           context {:docker (Docker.)
-                   :env {"COMPOSE_PROJECT_NAME" project}
+                   :env (merge {"COMPOSE_PROJECT_NAME" project}
+                               default-env)
                    :process (js-process)
                    :start (js/Date.now)
                    :opts {:project project

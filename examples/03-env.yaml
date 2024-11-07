@@ -1,0 +1,64 @@
+name: Example Suite - Environment variables
+
+# requires use of `--environ-file examples/03-env-file` to succeed
+
+env:
+  FOO: p1-${{ env.FOO || "foo" }}-s1
+  BAR: p1-${{ env.BAR || "bar" }}-s1
+
+tests:
+
+  env-depth-inside-FOO:
+    name: multiple levels, FOO inside
+    env:
+      FOO: p2-${{ env.FOO }}-s2
+    steps:
+      - exec: node1
+        env:
+          FOO: p3-${{ env.FOO }}-s3
+        run: |
+          FOO="p4-${FOO:-invaid}-s4"
+          echo "inside FOO: '${FOO}'"
+          [ "p4-p3-p2-p1-foo-s1-s2-s3-s4" = "${FOO}" ]
+
+  env-depth-inside-BAR:
+    name: multiple levels, BAR inside
+    env:
+      BAR: p2-${{ env.BAR }}-s2
+    steps:
+      - exec: node1
+        env:
+          BAR: p3-${{ env.BAR }}-s3
+        run: |
+          BAR="p4-${BAR:-invaid}-s4"
+          echo "inside BAR: '${BAR}'"
+          [ "p4-p3-p2-p1-abcde-s1-s2-s3-s4" = "${BAR}" ]
+
+  env-depth-outside-FOO:
+    name: multiple levels, FOO outside
+    env:
+      FOO: p2-${{ env.FOO }}-s2
+    steps:
+      - name: FOO outside
+        exec: :host
+        env:
+          FOO: p3-${{ env.FOO }}-s3
+        run: |
+          FOO="p4-${FOO:-invalid}-s4"
+          echo "outside FOO: '${FOO}'"
+          [ "p4-p3-p2-p1-foo-s1-s2-s3-s4" = "${FOO}" ]
+
+  env-depth-outside-BAR:
+    name: multiple levels, BAR outside
+    env:
+      FOO: p2-${{ env.FOO }}-s2
+      BAR: p2-${{ env.BAR }}-s2
+    steps:
+      - name: BAR outside
+        exec: :host
+        env:
+          BAR: p3-${{ env.BAR }}-s3
+        run: |
+          BAR="p4-${BAR:-invalid}-s4"
+          echo "outside BAR: '${BAR}'"
+          [ "p4-p3-p2-p1-abcde-s1-s2-s3-s4" = "${BAR}" ]

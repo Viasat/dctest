@@ -10,36 +10,32 @@ on:
 
 jobs:
 
-  cljs-tests:
-    name: Run CLJS tests
+  test-node:
+    name: Run Tests+Examples (Node ${{ matrix.node_version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node_version: [ '16.x', '18.x', '20.x', '22.x' ]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with: { submodules: 'recursive', fetch-depth: 0 }
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node_version }}
       - name: Install NPM
         run: npm install
 
       - name: Run Tests
         run: ./test/runtests
 
-  test-examples-node:
-    name: Test Examples (Node)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with: { submodules: 'recursive', fetch-depth: 0 }
-
-      - name: Install NPM
-        run: npm install
-
       - name: Run Examples
         run: ./test/runexamples
 
-  test-examples:
-    name: Test Examples (Docker)
+  test-docker:
+    name: Run Examples (Docker)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository

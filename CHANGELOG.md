@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.4.0
+* CLI option `--environ-file`
+
 ## v0.3.1
 * Fix: exit code regression for failed runs
 

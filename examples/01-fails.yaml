@@ -24,6 +24,7 @@ tests:
         run: echo 'This step is skipped'
 
   maybe-skipped:
+    depends: "fail-signal" # any failing test would do
     name: Skipped test (unless running with --continue-on-error)
     steps:
       - exec: node1

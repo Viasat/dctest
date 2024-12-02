@@ -35,6 +35,14 @@ tests:
       - exec: node2
         run: /bin/true
 
+  fail-expect:
+    name: Failing due to unmet expect condition
+    steps:
+      - exec: node1
+        run: /bin/true
+        expect:
+          - 1 == 2
+
   fail-expressions:
     name: Test thrown exception in expressions
     steps:

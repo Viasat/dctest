@@ -44,10 +44,24 @@ tests:
         expect:
           - 1 == 2
 
-  fail-expressions:
-    name: Test thrown exception in expressions
+  fail-if-throws:
+    name: Test thrown exception in expressions ('if')
+    steps:
+      - if: throw("Intentional Failure")
+        exec: node1
+        run: /bin/true
+
+  fail-env-throws:
+    name: Test thrown exception in expressions ('env')
+    steps:
+      - env:
+          FOO: ${{ throw("Intentional Failure") }}
+        exec: node1
+        run: /bin/true
+
+  fail-expect-throws:
+    name: Test thrown exception in expressions ('expect')
     steps:
       - exec: node1
-        env:
-          FOO: ${{ throw("Intentional Failure") }}
         run: /bin/true
+        expect: throw("Intentional Failure")

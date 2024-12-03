@@ -76,7 +76,21 @@ tests:
     steps:
       - exec: node1
         run: rm -f repeat-test-file
+
+      - name: Repeat on non-zero exit code
+        exec: node1
+        repeat: { retries: 2, interval: '1s' }
+        run: |
+          if [ ! -f repeat-test-file ]; then
+            touch repeat-test-file
+            exit 1
+          fi
+
       - exec: node1
+        run: rm -f repeat-test-file
+
+      - name: Repeat on failed expect assertion
+        exec: node1
         repeat: { retries: 2, interval: '1s' }
         run: |
           if [ ! -f repeat-test-file ]; then
@@ -86,5 +100,6 @@ tests:
           fi
         expect:
           - step.stdout == "Repeated successfully"
+
       - exec: node1
         run: rm -f repeat-test-file

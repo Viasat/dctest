@@ -33,9 +33,11 @@ Any type clarifications can be found in the glossary at the bottom.
 | `env` | map(str, istr) | set environment variables for command and expressions in the step, shadows suite and test `env` | `{}` |
 | `exec` | istr | location to execute `run` command, either a Docker Compose service name or `:host` | **required** |
 | `expect` | expr or list(expr) | additional success conditions, evaluated after `run` command, all of which must return a truthy value | `[]` |
+| `id` | str | identifier for the step, referenced in `steps` context | |
 | `if` | expr | execute the step, when result is truthy; otherwise, skip | `success()` |
 | `index` | int | references the index of the container to execute `run` commmand | `1` |
 | `name` | istr | a human-readable step name | step index |
+| `outputs` | map(str, istr) | available to future steps via `steps` context  | `{}` |
 | `repeat` | map(str, any) | presence indicates a step should be retried if the `run` or any `expect` condition fails | `null` |
 | `repeat.interval` | str | time to wait between retries in Docker Compose healthcheck format, ex: `1m20s` | `1s` |
 | `repeat.retries` | int | indicates number of retry attempts; retry indefinitely, if omitted | `null` |

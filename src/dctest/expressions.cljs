@@ -14,7 +14,7 @@
 (declare read-ast)
 
 (def supported-contexts
-  #{"env" "process" "step"})
+  #{"env" "process" "tests" "step" "steps"})
 
 (def stdlib
   ;; {name {:arity number :fn (fn [context & args] ..)}}

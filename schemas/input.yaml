@@ -4,6 +4,10 @@ $defs:
     type: object
     propertyNames: { type: string }
     additionalProperties: { type: string, expression: InterpolatedText }
+  outputs:
+    type: object
+    propertyNames: { type: string }
+    additionalProperties: { type: string, expression: InterpolatedText }
 
 # suite
 type: object
@@ -23,6 +27,7 @@ properties:
       properties:
         env:  { "$ref": "#/$defs/env" }
         name: { type: string, expression: InterpolatedText }
+        outputs: { "$ref": "#/$defs/outputs" }
         depends:
           oneOf:
             - type: string
@@ -45,8 +50,10 @@ properties:
                   - { type: string, expression: Expression }
                   - { type: array, items: { type: string, expression: Expression } }
               name: { type: string, expression: InterpolatedText }
+              id: { type: string }
               if: { type: string, expression: Expression, default: "success()" }
               index: { type: integer }
+              outputs: { "$ref": "#/$defs/outputs" }
               run:
                 oneOf:
                   - { type: string, expression: InterpolatedText }

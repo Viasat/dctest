@@ -103,3 +103,41 @@ tests:
 
       - exec: node1
         run: rm -f repeat-test-file
+
+  step-outputs:
+    name: Step outputs test
+    outputs:
+      TEST_OUTPUT: ${{ steps['step-1'].outputs.A_VALUE }}
+    steps:
+      - id: step-1
+        exec: node1
+        run: |
+          echo '{ "a": 13 }'
+        outputs:
+          A_VALUE: ${{ fromJSON(step.stdout).a }}
+
+      - exec: node1
+        run: echo -n '13 is the same as ${{ steps['step-1'].outputs.A_VALUE }}'
+        expect:
+          - steps['step-1'].outputs.A_VALUE == '13'
+          - step.stdout == '13 is the same as 13'
+          - null == steps['step-1'].outputs.NONEXISTENT_VALUE
+          - null == steps['nonexistent-step-id']
+
+  previous-test-outputs:
+    # repeat is an arbitrary example of a succesful test without 'outputs' defined
+    depends: [ repeat, step-outputs ]
+    name: Check previous tests' outputs
+    steps:
+      - name: Successful tests always return truthy 'outputs'
+        exec: node1
+        run: /bin/true
+        expect:
+          - tests['repeat'].outputs == {}
+
+      - name: Example step that uses a previous test's outputs
+        exec: node1
+        run: echo -n 'Earlier job output was ${{ tests['step-outputs'].outputs.TEST_OUTPUT }}'
+        expect:
+          - step.stdout == 'Earlier job output was 13'
+          - tests['step-outputs'].outputs.TEST_OUTPUT == '13'

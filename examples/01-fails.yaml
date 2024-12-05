@@ -65,3 +65,20 @@ tests:
       - exec: node1
         run: /bin/true
         expect: throw("Intentional Failure")
+
+  fail-with-outputs:
+    name: Failing test that defines outputs
+    outputs:
+      FAILED_TEST_OUTPUT: ${{ 1 + 1 }}
+    steps:
+      - exec: node1
+        run: /bin/false
+
+  maybe-check-empty-failure-outputs:
+    depends: fail-with-outputs
+    name: Assert that outputs should be empty/falsy from failed tests
+    steps:
+      - exec: node1
+        run: /bin/true
+        expect:
+          - tests['fail-with-outputs'].outputs == null

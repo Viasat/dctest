@@ -219,6 +219,12 @@ Options:
                        {:delay-ms interval
                         :check-fn #(not (failure? %))})))
 
+(defn evaluate-step-outputs
+  "Interpolates step outputs using executed step info (stdout/stderr)."
+  [context step]
+  (let [context (assoc context :step step)]
+    (update step :outputs #(interpolate-any context %))))
+
 (defn skip-if-necessary
   "Evaluates the step 'if' expression. Marks step as skipped, if 'if'
   evaluates to falsy; otherwise, returns step unmodified."
@@ -235,6 +241,7 @@ Options:
    - evaluating 'if'
    - interpolating keys ('env', 'name', ...)
    - executing 'run' and 'expect' conditions
+   - interpolating 'outputs'
 
   Short-circuits if skipped ('if' is falsy) or any aspect fails (including
   any errors during interpolation of keys). On failure, fail the step
@@ -253,10 +260,16 @@ Options:
                           (update :exec #(interpolate-any context %))
                           (update :run #(interpolate-any context %))
                           (->> (execute-step-retries context))
+                          (->> (evaluate-step-outputs context))
                           pass!)
+          ;; If skipped/failed, outputs will be present but uninterpolated
+          step (if (passed? step)
+                 step
+                 (dissoc step :outputs))
+
           stop (js/Date.now)
           step (assoc step :start start :stop stop)]
-    (select-keys step [:outcome :name :start :stop :error])))
+    (select-keys step [:outcome :id :name :start :stop :error :outputs])))
 
 (defn execute-steps
   "Runs all steps for a test. Returns test with completed steps.
@@ -272,11 +285,23 @@ Options:
                          (assoc-in context [:state :failed] true)
                          context)
               step (execute-step context step)
+              context (if (:id step)
+                        (assoc-in context [:steps (:id step)] step)
+                        context)
               test (update test :steps conj step)
               test (if (failure? step)
                      (fail! test)
                      test)]
         (P/recur steps test context)))))
+
+(defn evaluate-test-outputs
+  "Interpolates test outputs using executed step info (step outputs)."
+  [context test]
+  (let [steps-by-id (into {}
+                          (for [s (:steps test) :when (:id s)]
+                            [(:id s) s]))
+        context (assoc context :steps steps-by-id)]
+    (update test :outputs #(interpolate-any context %))))
 
 (defn run-test [context suite test]
   "Takes an uninterpolated test, and runs it to completion. Returns test
@@ -285,6 +310,7 @@ Options:
 
    - interpolating keys ('env', 'name', ...)
    - running all 'steps'
+   - interpolating 'outputs'
 
   Fail the test if any interpolated key throws an error or any step fails.
   If any key cannot be interpolated successfully, do not run steps, but do
@@ -300,7 +326,15 @@ Options:
           test (pending-> test
                           (update :name #(interpolate-any context %))
                           (->> (execute-steps context))
+                          (->> (evaluate-test-outputs context))
                           pass!)
+          ;; If skipped/failed, outputs will be present but uninterpolated
+          test (if (passed? test)
+                 test
+                 (dissoc test :outputs))
+
+          ;; Clean up for results-file format
+          test (assoc test :steps (mapv #(dissoc % :outputs) (:steps test)))
 
           stop (js/Date.now)
           test (assoc test :start start :stop stop)
@@ -308,7 +342,7 @@ Options:
           duration-in-sec (js/Math.floor (/ (- stop start) 1000))
           _ (log opts "    " (short-outcome test) (:name test) (str "(" duration-in-sec "s)"))]
 
-    (select-keys test [:id :name :outcome :start :stop :steps :error])))
+    (select-keys test [:id :name :outcome :start :stop :steps :error :outputs])))
 
 (defn filter-tests [graph filter-str]
   (let [raw-list (if (= "*" filter-str)
@@ -350,6 +384,7 @@ Options:
       suite
       (P/let [[test & tests] tests
               test (run-test context suite test)
+              context (assoc-in context [:tests (:id test)] test)
               suite (update suite :tests conj test)
               suite (if (failure? test)
                       (fail! suite)
@@ -379,11 +414,16 @@ Options:
           suite (pending-> suite
                            (update :name #(interpolate-any context %))
                            (update :tests #(resolve-test-order % (:test-filter opts))))
+
           _ (log opts)
           _ (log opts "  " (:name suite))
           suite (pending-> suite
                            (->> (run-tests context))
-                           pass!)]
+                           pass!)
+
+          ;; Clean up for results-file format
+          suite (update suite :tests (fn [tests]
+                                      (mapv #(dissoc % :outputs) tests)))]
 
     (select-keys suite [:outcome :name :tests])))
 
@@ -502,12 +542,14 @@ Options:
                      (update :expect #(if (string? %) [%] %))
                      (update :index #(or % 1))
                      (update :name #(or % (str "steps[" index "]")))
+                     (update :outputs update-keys name)
                      (update-in [:repeat :interval] parse-interval)))
         ->test (fn [test id]
                  (-> (merge {:name id} test)
                      (assoc :outcome :pending)
                      (update :env update-keys name)
-                     (update :steps #(vec (map-indexed ->step %)))))
+                     (update :steps #(vec (map-indexed ->step %)))
+                     (update :outputs update-keys name)))
         ->suite (fn [suite path]
                   (-> (merge {:name path} suite)
                       (assoc :outcome :pending)

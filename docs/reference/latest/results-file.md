@@ -41,6 +41,7 @@ Where steps contain the following keys:
 
 | name | type | description |
 | ---- | ---- | ----------- |
+| `id` | string | the step id |
 | `name` | string | the step name |
 | `outcome` | string | the overall outcome of the test, one of `passed`, `failed`, or `skipped` |
 | `error` | error | the primary/first error that occurred, if the step failed for any reason |

@@ -1,5 +1,9 @@
 name: Example Suite - Failures
 
+# This file demonstrates negative cases. Tests IDs prefixed 'fail-'
+# are expected to always fail. Test IDs prefixed 'maybe-' are expected
+# to pass (when using `--continue-on-error`).
+
 tests:
 
   fail-exit-code:
@@ -65,3 +69,44 @@ tests:
       - exec: node1
         run: /bin/true
         expect: throw("Intentional Failure")
+
+  fail-with-outputs:
+    name: Failing test that defines outputs
+    outputs:
+      TWO: 2
+      THREE: ${{ steps['failed-step'].outputs.THREE }}
+      ERROR: ${{ throw("Intentional Failure") }}
+    steps:
+      - id: failed-step
+        exec: node1
+        run: /bin/false
+        outputs:
+          THREE: ${{ 3 }}
+
+  maybe-check-empty-failure-outputs:
+    depends: fail-with-outputs
+    name: Assert failed tests still interpolate outputs
+    steps:
+      - exec: node1
+        run: /bin/true
+        expect:
+          # Successfully interpolated outputs are returned, even for failed tests
+          - tests['fail-with-outputs'].outputs.TWO == '2'
+          - tests['fail-with-outputs'].outputs.THREE == '3'
+          - tests['fail-with-outputs'].outputs.ERROR == null
+
+  fail-outputs-in-test-error:
+    name: Tests fail if test outputs error
+    outputs:
+      ERROR: ${{ throw("Intentional Failure") }}
+    steps:
+      - exec: node1
+        run: /bin/true
+
+  fail-outputs-in-step-error:
+    name: Tests fail if step outputs error
+    steps:
+      - exec: node1
+        run: /bin/true
+        outputs:
+          ERROR: ${{ throw("Intentional Failure") }}

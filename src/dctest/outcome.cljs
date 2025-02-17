@@ -9,6 +9,9 @@
 (defn passed? [{:keys [outcome]}]
   (= :passed outcome))
 
+(defn skipped? [{:keys [outcome]}]
+  (= :skipped outcome))
+
 (defn pending? [{:keys [outcome]}]
   (= :pending outcome))
 

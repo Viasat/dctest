@@ -47,6 +47,7 @@ properties:
             additionalProperties: false
             required: [ name, outcome, start, stop ]
             properties:
+              id: { type: string }
               name: { type: string }
               outcome: { "$ref": "#/$defs/outcome" }
               error: { "$ref": "#/$defs/error" }

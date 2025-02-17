@@ -79,6 +79,25 @@ The `step` context references the step itself and contains the following:
 | `step.stdout` | string | standard output of the command, only available after command is run |
 | `step.stderr` | string | standard error of the command, only available after command is run |
 
+### steps
+
+The `steps` context is a mapping of preceeding steps, indexed by `id`, in the
+current test. `steps` contains all the information from the `step` plus the
+following:
+
+| name | type | description |
+| ---- | ---- | ----------- |
+| `steps.<step-id>.outputs` | object | resolved `outputs` mappings |
+
+### tests
+
+The `tests` context is a mapping of preceeding tests, indexed by `id`, which
+includes the following information:
+
+| name | type | description |
+| ---- | ---- | ----------- |
+| `tests.<test-id>.outputs` | object | resolved `outputs` mappings |
+
 ## Functions and Methods
 
 ### Status

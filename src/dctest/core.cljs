@@ -256,7 +256,7 @@ Options:
                           pass!)
           stop (js/Date.now)
           step (assoc step :start start :stop stop)]
-    (select-keys step [:outcome :name :start :stop :error])))
+    (select-keys step [:outcome :name :start :stop :error :additionalErrors])))
 
 (defn execute-steps
   "Runs all steps for a test. Returns test with completed steps.
@@ -308,7 +308,7 @@ Options:
           duration-in-sec (js/Math.floor (/ (- stop start) 1000))
           _ (log opts "    " (short-outcome test) (:name test) (str "(" duration-in-sec "s)"))]
 
-    (select-keys test [:id :name :outcome :start :stop :steps :error])))
+    (select-keys test [:id :name :outcome :start :stop :steps :error :additionalErrors])))
 
 (defn filter-tests [graph filter-str]
   (let [raw-list (if (= "*" filter-str)

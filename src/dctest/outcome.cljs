@@ -12,10 +12,14 @@
 (defn pending? [{:keys [outcome]}]
   (= :pending outcome))
 
-(defn fail! [m & [error]]
-  (merge m
-         {:outcome :failed}
-         (when error {:error error})))
+(defn fail! [m & errors]
+  (let [m (assoc m :outcome :failed)]
+    (reduce (fn append-error [res err]
+              (if-not (:error res)
+                (assoc res :error err)
+                (update res :additionalErrors (fnil conj []) err)))
+            m
+            errors)))
 
 (defn pass! [m] (assoc m :outcome :passed))
 (defn skip! [m] (assoc m :outcome :skipped))

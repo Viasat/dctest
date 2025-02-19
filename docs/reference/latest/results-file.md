@@ -31,7 +31,8 @@ top-level keys, which are further described below:
 | `id` | string | the test id (may not be unique if more than one suite was used) |
 | `name` | string | the test name |
 | `outcome` | string | the overall outcome of the test, either `passed` or `failed` |
-| `error` | string | an error message, if the test errored |
+| `error` | error | the primary/first error that occurred, if the test failed for any reason |
+| `additionalErrors` | array(error) | additional errors, if necessary |
 | `start` | integer | starting timestamp of the test (milliseconds elapsed since the epoch) |
 | `stop` | integer | ending timestamp of the test (milliseconds elapsed since the epoch) |
 | `steps` | array(step) | steps executed during this test |
@@ -42,7 +43,8 @@ Where steps contain the following keys:
 | ---- | ---- | ----------- |
 | `name` | string | the step name |
 | `outcome` | string | the overall outcome of the test, one of `passed`, `failed`, or `skipped` |
-| `error` | string | an error message, if the step failed for any reason |
+| `error` | error | the primary/first error that occurred, if the step failed for any reason |
+| `additionalErrors` | array(error) | additional errors, if necessary |
 | `start` | integer | starting timestamp of the step (milliseconds elapsed since the epoch) |
 | `stop` | integer | ending timestamp of the step (milliseconds elapsed since the epoch) |
 

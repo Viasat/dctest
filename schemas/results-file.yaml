@@ -35,6 +35,7 @@ properties:
         name: { type: string }
         outcome: { "$ref": "#/$defs/outcome" }
         error: { "$ref": "#/$defs/error" }
+        additionalErrors: { type: array, items: { "$ref": "#/$defs/error" } }
         start: { type: integer }
         stop: { type: integer }
         steps:
@@ -49,6 +50,7 @@ properties:
               name: { type: string }
               outcome: { "$ref": "#/$defs/outcome" }
               error: { "$ref": "#/$defs/error" }
+              additionalErrors: { type: array, items: { "$ref": "#/$defs/error" } }
               start: { type: integer }
               stop: { type: integer }
 

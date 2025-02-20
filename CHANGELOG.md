@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.5.0
+* Support test- and step-level outputs
+
 ## v0.4.0
 * CLI option `--environ-file`
 

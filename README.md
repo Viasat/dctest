@@ -33,18 +33,18 @@ available.
 Via NPM as a dev dependency:
 
 ```bash
-npm install --save-dev @lonocloud/dctest@0.3.1
+npm install --save-dev @lonocloud/dctest
 ./node_modules/.bin/dctest $USER /path/to/suite.yaml
 ```
 
 Via Docker Hub:
 
 ```bash
-docker pull lonocloud/dctest:0.3.1
+docker pull lonocloud/dctest
 docker run --rm \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /path/to/suite.yaml:/tests/suite.yaml \
-  lonocloud/dctest:0.3.1 $USER /tests/suite.yaml
+  lonocloud/dctest $USER /tests/suite.yaml
 ```
 
 ## Copyright & License

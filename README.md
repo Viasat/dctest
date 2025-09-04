@@ -4,6 +4,7 @@ Integration Testing in Docker Compose
 
 [![npm](https://img.shields.io/npm/v/@lonocloud/dctest.svg)](https://www.npmjs.com/package/@lonocloud/dctest)
 [![docker](https://img.shields.io/docker/v/lonocloud/dctest.svg)](https://hub.docker.com/r/lonocloud/dctest)
+[![Push](https://github.com/Viasat/dctest/actions/workflows/push.yaml/badge.svg)](https://github.com/Viasat/dctest/actions/workflows/push.yaml)
 
 ## Quickstart
 

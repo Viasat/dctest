@@ -54,6 +54,8 @@ properties:
               additionalErrors: { type: array, items: { "$ref": "#/$defs/error" } }
               start: { type: integer }
               stop: { type: integer }
+              stdout: { type: string }
+              stderr: { type: string }
 
   errors:
     type: array

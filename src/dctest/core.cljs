@@ -36,6 +36,7 @@ Options:
   --quiet                       Only print final totals
   --verbose-commands            Show live stdout/stderr from test commands
   --results-file RESULTS-FILE   Write JSON results to RESULTS-FILE
+  --results-verbose             Include stdout/stderr in results file
   --schema-file SCHEMA          Path to input schema file [env: DCTEST_SCHEMA]
                                 [default: ./schemas/input.yaml]
   --environ-file FILE           Load and parse FILE as default env settings.
@@ -283,7 +284,9 @@ Options:
 
           stop (js/Date.now)
           step (assoc step :start start :stop stop)]
-    (select-keys step [:outcome :id :name :start :stop :outputs :error :additionalErrors])))
+    (cond-> (select-keys step [:outcome :id :name :start :stop :outputs :error :additionalErrors])
+      (:results-verbose (:opts context))
+      (merge (select-keys step [:stdout :stderr])))))
 
 (defn execute-steps
   "Runs all steps for a test. Returns test with completed steps.
@@ -587,7 +590,7 @@ Options:
 (defn -main [& argv]
   (P/let [opts (parse-opts usage (or argv #js []))
           {:keys [continue-on-error project test-suite test-filter
-                  quiet verbose-commands environ-file]} opts
+                  quiet verbose-commands results-verbose environ-file]} opts
           _ (when (empty? test-suite)
               (Eprintln (str "WARNING: no test-suite was specified")))
 
@@ -600,7 +603,8 @@ Options:
                    :opts {:project project
                           :quiet quiet
                           :test-filter test-filter
-                          :verbose-commands verbose-commands}
+                          :verbose-commands verbose-commands
+                          :results-verbose results-verbose}
                    :state {:failed false}
                    :strategy {:continue-on-error continue-on-error}}
 
